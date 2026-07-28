@@ -117,7 +117,13 @@ Added as `dams/lake_caroline/dam.yaml` for cascade/watershed completeness
 (it feeds into Loch Lomond) — not because it needs its own breach analysis.
 Do not spend Advanced-tier HEC-RAS effort on it unless asked.
 
-## Flagged: ambiguous/likely-mismatched files in Downloads
+## Resolved: Grand County files are unrelated -- ignore
+
+Confirmed with the user (2026-07-28): the reservoirs of interest are the
+Clear Creek County dams only. The Grand-County-looking files below are
+unrelated to this project and are not used anywhere in this toolkit.
+
+## Ignored (unrelated, do not use) -- previously-flagged ambiguous files
 
 Several files in `C:\Users\jroberts\Downloads\` appear, from their own
 internal content, to describe a **different, unrelated "Loch Lomond"** in

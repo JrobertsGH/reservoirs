@@ -1,0 +1,51 @@
+# Fall River Reservoir Dam - Idaho Springs, Clear Creek County, CO
+# Sources: Colorado DWR dam inventory (data.colorado.gov/resource/mgjv-xmr5),
+# 2020-07-20 Engineer's Inspection Report (DAM ID 070129), 2021 CCLiDAR survey.
+name: "Fall River Reservoir"
+state_dam_id: "070129"
+nid_id: "00193"
+county: "Clear Creek"
+stream: "Fall River"
+owner: "Agricultural Ditch & Reservoir Company"
+
+location:
+  latitude: 39.819876
+  longitude: -105.690771
+
+hazard_class: "High"
+embankment_type: "Earth embankment"
+year_completed: 1974
+
+height_ft: 85.0
+crest_length_ft: 840.0
+crest_width_ft: 20.0
+crest_elevation_ft: 10841.0
+
+normal_storage_ac_ft: 890.0
+max_storage_ac_ft: 1050.0  # per prior research; confirm against EIR/owner records in Phase 1
+surface_area_ac: 24.0
+drainage_area_ac: 1792.0
+
+spillway_width_ft: 140.0
+spillway_capacity_cfs: 6400.0
+
+# Fall River Reservoir is the lower dam in this two-reservoir cascade - no
+# further reservoir downstream before Idaho Springs, so no cascade_downstream.
+#
+# NOTE (2020 EIR, "Conditionally Satisfactory"): known seepage issues at the
+# toe/left groin, worsening through the summer as the reservoir stays full;
+# owner has been directed to retain an engineer for a toe-drain fix. Relevant
+# EAP narrative context, not a breach-parameter input, but worth citing.
+
+terrain_sources:
+  - path: "\\\\ORION\\Departments\\Engineering\\RESERVOIRS\\ADRC- Reservoirs\\Fall River\\CCLiDAR_FallRiver_20211018\\AW_CCLiDAR_FallRiver_2ft_Contours_20211018.dxf"
+    kind: "lidar_contours_dxf"
+    description: "2021 aerial LiDAR, 2ft contours"
+  - path: "\\\\ORION\\Departments\\Engineering\\RESERVOIRS\\ADRC- Reservoirs\\Fall River\\CCLiDAR_FallRiver_20211018\\AW_CCLiDAR_FallRiver_TIN_20211018.dxf"
+    kind: "lidar_tin_dxf"
+    description: "2021 aerial LiDAR, TIN surface"
+  - path: "\\\\ORION\\Departments\\Engineering\\RESERVOIRS\\ADRC- Reservoirs\\Fall River\\CCLiDAR_FallRiver_20211018\\AW_CCLiDAR_FallRiver_POINTS_20211018.csv"
+    kind: "lidar_points_csv"
+    description: "2021 aerial LiDAR, raw point cloud"
+
+preliminary: true

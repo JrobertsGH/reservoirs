@@ -1,0 +1,58 @@
+# Loch Lomond Dam - Clear Creek County, CO
+# Sources: Colorado DWR dam inventory (data.colorado.gov/resource/mgjv-xmr5),
+# 2020 inspection report, 2021 CCLiDAR survey deliverables.
+name: "Loch Lomond"
+state_dam_id: "070210"
+nid_id: "00199"
+county: "Clear Creek"
+stream: "Fall River"
+owner: "Agricultural Ditch & Reservoir Company"
+
+location:
+  latitude: 39.833713
+  longitude: -105.675833
+
+hazard_class: "High"
+embankment_type: "Rock/Earth embankment"
+year_completed: 1963
+
+height_ft: 42.0
+crest_length_ft: 875.0
+crest_elevation_ft: 11200.0
+
+normal_storage_ac_ft: 875.0
+surface_area_ac: 31.0
+
+# NOTE: state record lists drainage area as 685 sq mi (= 438,400 ac). This is
+# implausibly large relative to Fall River Reservoir's downstream drainage
+# area of only 1,792 ac (per its 2020 EIR) -- Fall River is 9 mi *downstream*
+# of Loch Lomond on the same stream and should have a LARGER contributing
+# area, not a smaller one. Likely a units error in the state dataset (e.g.
+# recorded in the wrong field, or actually sq mi elsewhere and ac here).
+# TODO(Phase 1): re-delineate drainage area from terrain/watershed data
+# (Fall River Watershed Topo.pdf on file may resolve this) before relying on
+# this figure for the storage curve or any hydrology calcs.
+drainage_area_ac: 438400.0  # UNVERIFIED - see note above
+
+spillway_capacity_cfs: 1200.0
+
+cascade_downstream:
+  dam_id: "fall_river"
+  distance_mi: 9.0
+  note: >
+    Loch Lomond's breach outflow travels down Fall River and reaches Fall
+    River Reservoir before continuing toward Idaho Springs. Route the breach
+    hydrograph through Fall River Reservoir rather than modeling in isolation.
+
+terrain_sources:
+  - path: "\\\\ORION\\Departments\\Engineering\\RESERVOIRS\\ADRC- Reservoirs\\Loch Lomond\\Topo-2021\\CCLiDAR_LochLomond_20211018-20211027T165546Z-001\\CCLiDAR_LochLomond_20211018\\AW_CCLiDAR_LochLomond_2ft_CONTOURS_20211018.dxf"
+    kind: "lidar_contours_dxf"
+    description: "2021 aerial LiDAR, 2ft contours"
+  - path: "\\\\ORION\\Departments\\Engineering\\RESERVOIRS\\ADRC- Reservoirs\\Loch Lomond\\Topo-2021\\CCLiDAR_LochLomond_20211018-20211027T165546Z-001\\CCLiDAR_LochLomond_20211018\\AW_CCLiDAR_LochLomond_TIN_20211018.dxf"
+    kind: "lidar_tin_dxf"
+    description: "2021 aerial LiDAR, TIN surface"
+  - path: "\\\\ORION\\Departments\\Engineering\\RESERVOIRS\\ADRC- Reservoirs\\Loch Lomond\\Topo-2021\\CCLiDAR_LochLomond_20211018-20211027T165546Z-001\\CCLiDAR_LochLomond_20211018\\AW_CCLiDAR_LochLomond_ALL_POINTS.csv"
+    kind: "lidar_points_csv"
+    description: "2021 aerial LiDAR, raw point cloud"
+
+preliminary: true

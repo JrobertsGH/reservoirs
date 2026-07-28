@@ -1,0 +1,17 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "reservoirs"
+version = "0.1.0"
+description = "Reusable dam-breach inundation mapping toolkit"
+requires-python = ">=3.11"
+
+[project.scripts]
+reservoirs-breach-params = "reservoirs.cli:breach_params_cmd"
+reservoirs-terrain = "reservoirs.cli:terrain_cmd"
+reservoirs-storage-curve = "reservoirs.cli:storage_curve_cmd"
+
+[tool.setuptools.packages.find]
+where = ["src"]

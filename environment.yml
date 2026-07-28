@@ -1,0 +1,24 @@
+name: reservoirs
+channels:
+  - conda-forge
+  - nodefaults
+dependencies:
+  - python=3.11
+  - gdal
+  - rasterio
+  - geopandas
+  - shapely
+  - pyproj
+  - rioxarray
+  - matplotlib
+  - contextily
+  - matplotlib-scalebar
+  - pyyaml
+  - pydantic>=2
+  - ezdxf
+  - pytest
+  - pip
+  - pip:
+      - ras-commander
+      - py3dep
+      - pygeohydro

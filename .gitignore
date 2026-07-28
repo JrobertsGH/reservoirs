@@ -13,3 +13,6 @@ dams/*/ras_project/
 
 # Local env
 .env
+
+# Scratch commit-message files used when committing via `git commit -F`
+.git-commit-msg.txt

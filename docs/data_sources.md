@@ -73,18 +73,79 @@ look before building `terrain.py`/`storage_curve.py` from scratch.
 - `LochLomond21H264 (1).mov` — `Engineering\GIS_FILES\PMF\Misc\`. Video,
   possibly drone footage of the dam/reservoir.
 
-## Known gap: the actual 1997 inundation map / 2017 EAP documents
+## 2025 Engineer's Inspection Reports (EIRs) — the actual regulatory driver
 
-Unlike CMWC's other reservoirs (Fairmount, Fortune, Maple Grove, Smart,
-Welton — which have EAP `.docx` files directly in `Water Resources\Dam
-Emergency Action Plans\`), **no EAP document or inundation map file for
-Loch Lomond or Fall River Reservoir has been found on the share** — only
-the supporting engineering data listed above. The state record confirms
-both documents exist (dated 2017-10-01 and 1997-01-01 respectively), so
-they're on file *somewhere* — likely with DWR directly, or in ADRC's own
-separate records rather than CMWC's share. Worth requesting from DWR or
-ADRC early: even a crude 1997-vintage inundation extent is a useful sanity
-check against this toolkit's output.
+Found in `C:\Users\jroberts\Downloads\`: `LochLomond_EIR-20250716.pdf` and
+`FallRiver_EIR-20250716.pdf` (State Dam IDs 070210 and 070129 — confirmed
+correct dams), each far more current than the 2020 EIR previously on the
+network share. These are the single most important documents found so far:
+
+- **Confirms the regulatory driver directly, in DWR's own words**: *"The
+  current 1996 inundation map for Loch Lomond and Fall River is not
+  helpful... The EAP in our records only includes a detailed inundation map
+  for the much smaller Lower Chinns dam. A detailed inundation map should be
+  developed for Loch Lomond and/or Fall River."* (There's a third dam,
+  Lower Chinns, in the same EAP that already has one — not otherwise in
+  this project's scope, but a useful reference for format/precedent.)
+- **A 2025 GEI Consultants Comprehensive Dam Safety Evaluation (CDSE)**
+  identified specific Potential Failure Modes (PFMs) with a formal risk
+  matrix for both dams. For **Loch Lomond**: internal erosion/piping along
+  the outlet conduit (PFMs 15, 17) rated "poor confidence," near the
+  unacceptable-risk boundary. For **Fall River Reservoir**: internal
+  erosion through the foundation via contact/scour (PFM #10) is the
+  single highest-risk PFM, also "poor confidence," in GEI's unacceptable
+  zone. **This means piping/internal-erosion, not overtopping, should be
+  the primary failure mode reported for both dams** — see the notes now in
+  each `dam.yaml`.
+- Corrected Loch Lomond's crest width to 12 ft (previously unset/assumed).
+- Both dams remain rated "Conditionally Satisfactory," consistent with the
+  2020 Fall River EIR's seepage findings (multiple mapped seep locations,
+  a historic sand boil at Fall River's Seep D).
+
+An email thread accompanying these (`Kirch - DNR, Jim` to Peter Acker/
+ADRC, Aug 2024) confirms Jim Kirch, P.E. is DWR's Water Division 1 dam
+safety engineer for this system, and that EAPs must be updated **annually**
+per Rule 13.7.4 — useful contact/process context for the final deliverable.
+
+## A third dam: Lake Caroline
+
+The same 2024/2025 DWR inspection cycle covers **Lake Caroline** (State Dam
+ID 070211), sitting immediately upstream of Loch Lomond in the same
+drainage, same owner (ADRC). It's Low Hazard, tiny (10 ft dam, 144 AF), and
+**EAP/inundation map is explicitly not required** for it under DWR rules.
+Added as `dams/lake_caroline/dam.yaml` for cascade/watershed completeness
+(it feeds into Loch Lomond) — not because it needs its own breach analysis.
+Do not spend Advanced-tier HEC-RAS effort on it unless asked.
+
+## Flagged: ambiguous/likely-mismatched files in Downloads
+
+Several files in `C:\Users\jroberts\Downloads\` appear, from their own
+internal content, to describe a **different, unrelated "Loch Lomond"** in
+**Grand County** (near Granby/Shadow Mountain Reservoir, Upper Colorado
+River basin — not Clear Creek County):
+
+- `loch_lomond_breach_analysis.html`, `loch_lomond_breach_analysis_
+  summary.json`, `loch_lomond_breach_flood_analysis.geojson`,
+  `loch_lomond_inundation.geojson` — the JSON explicitly states
+  `"county": "Grand County"`, `"region": "Upper Colorado River Basin"`,
+  center coordinates lat 40.85°N (our Loch Lomond is at 39.83°N), and
+  downstream impacts to "Granby" and "Kremmling" via "Cascade Creek" —
+  none of which match this project's Loch Lomond (Clear Creek County,
+  Fall River drainage, Idaho Springs).
+- `LOCH_LOMOND_TOPO_10042022.csv` / `.dwg` / `_PTS.pts` — raw coordinates
+  fall within the same UTM-13N-style range the mismatched JSON above
+  claims for the Grand County site.
+
+However, `CAROLINE_TOPO_10042022.csv`'s raw elevations (~11,874 ft) line up
+closely with the *correct*, Clear-Creek-County Lake Caroline's real crest
+elevation (11,880 ft, per its verified 2024 EIR) — so it's plausible that
+file is genuinely correct while the same-dated "LOCH_LOMOND_TOPO" file
+next to it is not, or that both were exported with an unusual/undocumented
+coordinate convention. **This is not resolved** — none of these
+Downloads topo/breach-analysis files have been used to inform any
+`dam.yaml` or terrain source in this project. Before incorporating any of
+them: confirm with the user what project/client they actually came from,
+since the accompanying JSON's own stated location doesn't match.
 
 ## Known data-quality issue: Loch Lomond drainage area
 

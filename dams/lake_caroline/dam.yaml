@@ -1,0 +1,50 @@
+# Lake Caroline Dam - Clear Creek County, CO
+# Source: Colorado DWR 2024-08-06 Engineer's Inspection Report (EIR), part
+# of the same inspection cycle/email as Fall River and Loch Lomond.
+#
+# NOT in the original scope of this project (user asked specifically for
+# Loch Lomond and Fall River Reservoir) -- included here for watershed/
+# cascade completeness only, since it sits upstream of Loch Lomond in the
+# same drainage. Low Hazard, EAP not required by DWR, so this dam does NOT
+# need its own inundation map/breach analysis under Rule 16.1.5. Do not
+# spend Advanced-tier HEC-RAS effort on this dam unless asked.
+#
+# Consists of a small dam plus a separate "dike" section (a low saddle in
+# the ridge). Per the 2024 EIR, a full dike failure would be a slow
+# top-~3ft release, not a catastrophic breach -- consistent with its Low
+# Hazard classification.
+name: "Lake Caroline"
+state_dam_id: "070211"
+county: "Clear Creek"
+owner: "Agricultural Ditch & Reservoir Company"
+
+location:
+  latitude: 39.834417
+  longitude: -105.686008
+
+hazard_class: "Low"
+embankment_type: "Rockfill with impervious upstream shell"
+year_completed: 1902
+
+height_ft: 10.0
+crest_length_ft: 150.0
+crest_width_ft: 12.0
+crest_elevation_ft: 11880.0
+
+normal_storage_ac_ft: 144.0
+surface_area_ac: 20.0
+drainage_area_ac: 110.0
+
+spillway_width_ft: 3.0
+spillway_capacity_cfs: 35.0
+
+cascade_downstream:
+  dam_id: "loch_lomond"
+  distance_mi: 0.5  # approximate -- immediately upstream in the same drainage
+  note: >
+    Lake Caroline drains into Loch Lomond. Not modeled as a breach scenario
+    of its own (Low Hazard, EAP not required) -- tracked only in case a
+    future Loch Lomond analysis needs to account for Lake Caroline as part
+    of the contributing watershed/inflow.
+
+preliminary: true

@@ -13,6 +13,8 @@ dependencies:
   - matplotlib
   - contextily
   - matplotlib-scalebar
+  - pandas
+  - scipy
   - pyyaml
   - pydantic>=2
   - ezdxf

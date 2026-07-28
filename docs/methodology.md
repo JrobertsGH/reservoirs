@@ -12,10 +12,25 @@ as part of its Emergency Action Plan (EAP) (Rule 16.1.5). Both dams this
 toolkit currently covers — **Loch Lomond Dam** and **Fall River Reservoir
 Dam**, both in Clear Creek County, owned by the Agricultural Ditch &
 Reservoir Company (ADRC) — are classified **High Hazard**, and their
-inundation maps on file with the state date to **1997**. This toolkit exists
-to produce an updated, defensible inundation analysis for both, built as a
-*reusable* pipeline so the next dam ADRC/CMWC needs to analyze isn't a
+inundation maps on file with the state date to **1996/1997**. This toolkit
+exists to produce an updated, defensible inundation analysis for both, built
+as a *reusable* pipeline so the next dam ADRC/CMWC needs to analyze isn't a
 from-scratch effort.
+
+DWR's 2025 Engineer's Inspection Reports for both dams state the need
+directly: *"The current 1996 inundation map for Loch Lomond and Fall River
+is not helpful... A detailed inundation map should be developed for Loch
+Lomond and/or Fall River."* (See [`data_sources.md`](data_sources.md) for
+the full context, including a 2025 GEI Consultants risk assessment
+identifying internal erosion/piping — not overtopping — as the dominant
+threat for both dams, which is why the toolkit treats `FailureMode.piping`
+as the primary scenario for both, per each dam's `dam.yaml` notes.)
+
+A third, much smaller dam in the same drainage — **Lake Caroline**,
+immediately upstream of Loch Lomond, same owner — is tracked in
+`dams/lake_caroline/dam.yaml` for watershed/cascade completeness only. It's
+Low Hazard and DWR does not require an EAP or inundation map for it, so it
+gets no HEC-RAS effort of its own.
 
 ## The regulatory framework
 

@@ -1,6 +1,22 @@
 # Fall River Reservoir Dam - Idaho Springs, Clear Creek County, CO
 # Sources: Colorado DWR dam inventory (data.colorado.gov/resource/mgjv-xmr5),
-# 2020-07-20 Engineer's Inspection Report (DAM ID 070129), 2021 CCLiDAR survey.
+# 2021 CCLiDAR survey, and the 2025-07-16 Engineer's Inspection Report (EIR)
+# -- see docs/data_sources.md. Supersedes the 2020-07-20 EIR previously used
+# for condition narrative (geometry facts below were already consistent).
+#
+# 2025 EIR / GEI CDSE risk-assessment note: the highest-risk potential
+# failure mode identified is internal erosion through the FOUNDATION via
+# contact/scour erosion (PFM #10) -- "poor confidence," plotting in GEI's
+# unacceptable-risk zone. Secondary elevated PFMs: internal erosion through
+# the foundation (BEP, #7) and along the outlet conduit (#15). When running
+# breach_params.estimate_all_methods() for this dam, treat
+# FailureMode.piping as the primary scenario to report, with overtopping as
+# a secondary/comparison case -- not the reverse.
+#
+# DWR's own 2025 EIR states plainly: "The current 1996 inundation map for
+# Loch Lomond and Fall River is not helpful... A detailed inundation map
+# should be developed for Loch Lomond and/or Fall River." That sentence is
+# the direct regulatory basis for this entire project.
 name: "Fall River Reservoir"
 state_dam_id: "070129"
 nid_id: "00193"
@@ -32,10 +48,12 @@ spillway_capacity_cfs: 6400.0
 # Fall River Reservoir is the lower dam in this two-reservoir cascade - no
 # further reservoir downstream before Idaho Springs, so no cascade_downstream.
 #
-# NOTE (2020 EIR, "Conditionally Satisfactory"): known seepage issues at the
-# toe/left groin, worsening through the summer as the reservoir stays full;
-# owner has been directed to retain an engineer for a toe-drain fix. Relevant
-# EAP narrative context, not a breach-parameter input, but worth citing.
+# NOTE (2020 & 2025 EIRs, "Conditionally Satisfactory" both times): known
+# seepage at multiple mapped locations (Seeps A-F, including a historic
+# sand boil at Seep D) and at the left groin, worsening through the summer
+# as the reservoir stays full; owner has been directed to retain an
+# engineer for a toe-drain fix. Relevant EAP narrative context, and
+# consistent with the CDSE's foundation-erosion PFM findings above.
 
 terrain_sources:
   - path: "\\\\ORION\\Departments\\Engineering\\RESERVOIRS\\ADRC- Reservoirs\\Fall River\\CCLiDAR_FallRiver_20211018\\AW_CCLiDAR_FallRiver_2ft_Contours_20211018.dxf"

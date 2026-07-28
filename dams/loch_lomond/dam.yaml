@@ -1,6 +1,20 @@
 # Loch Lomond Dam - Clear Creek County, CO
 # Sources: Colorado DWR dam inventory (data.colorado.gov/resource/mgjv-xmr5),
-# 2020 inspection report, 2021 CCLiDAR survey deliverables.
+# 2021 CCLiDAR survey deliverables, and the 2025-07-16 Engineer's Inspection
+# Report (EIR) -- see docs/data_sources.md.
+#
+# 2025 EIR / GEI CDSE risk-assessment note: the dam's Comprehensive Dam
+# Safety Evaluation identifies internal erosion / piping along the outlet
+# conduit (PFMs 15 and 17) as the highest-risk potential failure modes --
+# "poor confidence" ratings near the boundary of "unacceptable" risk on
+# GEI's matrix. When running breach_params.estimate_all_methods() for this
+# dam, treat FailureMode.piping as the primary scenario to report, with
+# overtopping as a secondary/comparison case -- not the reverse.
+#
+# DWR's own 2025 EIR states plainly: "The current 1996 inundation map for
+# Loch Lomond and Fall River is not helpful... A detailed inundation map
+# should be developed for Loch Lomond and/or Fall River." That sentence is
+# the direct regulatory basis for this entire project.
 name: "Loch Lomond"
 state_dam_id: "070210"
 nid_id: "00199"
@@ -18,6 +32,7 @@ year_completed: 1963
 
 height_ft: 42.0
 crest_length_ft: 875.0
+crest_width_ft: 12.0  # per 2025 EIR
 crest_elevation_ft: 11200.0
 
 normal_storage_ac_ft: 875.0
@@ -43,6 +58,14 @@ cascade_downstream:
     Loch Lomond's breach outflow travels down Fall River and reaches Fall
     River Reservoir before continuing toward Idaho Springs. Route the breach
     hydrograph through Fall River Reservoir rather than modeling in isolation.
+
+# Upstream note (no schema field for this yet -- documented here, not
+# modeled, since Lake Caroline is Low Hazard/no EAP required and tiny
+# relative to Loch Lomond): Lake Caroline (State Dam ID 070211, see
+# dams/lake_caroline/dam.yaml) sits upstream of Loch Lomond in the same
+# drainage. It's small enough (10 ft, 144 AF) that its own failure isn't
+# expected to meaningfully change Loch Lomond's breach scenario, but it's
+# tracked for watershed/system completeness.
 
 terrain_sources:
   - path: "\\\\ORION\\Departments\\Engineering\\RESERVOIRS\\ADRC- Reservoirs\\Loch Lomond\\Topo-2021\\CCLiDAR_LochLomond_20211018-20211027T165546Z-001\\CCLiDAR_LochLomond_20211018\\AW_CCLiDAR_LochLomond_2ft_CONTOURS_20211018.dxf"

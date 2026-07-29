@@ -36,6 +36,12 @@ before reaching Idaho Springs, rather than modeled in isolation.
   ingested yet, and known data-quality gaps.
 - [`docs/preliminary_disclaimer.md`](docs/preliminary_disclaimer.md) — the
   PE-review requirement, reused on every generated output.
+- [`docs/user_guide.md`](docs/user_guide.md) — practical, run-this
+  instructions for every pipeline stage, environment gotchas, and how to
+  add a new dam.
+- [`docs/audit_trail.md`](docs/audit_trail.md) — chronological record of
+  non-obvious findings, fixes, and data-quality decisions, with evidence
+  trails. Append to it; don't edit history.
 
 ## Project layout
 

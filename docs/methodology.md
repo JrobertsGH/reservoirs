@@ -86,6 +86,28 @@ Each stage is independently runnable (console-script entry points in
 `pyproject.toml`), so a breach-parameter report can be produced and reviewed
 long before anyone touches HEC-RAS.
 
+## One real manual step: the dam embankment structure itself
+
+`ras_project.py` automates project creation, terrain attachment, 2D flow
+area definition/meshing, applying computed breach parameters, initial/
+boundary conditions, and running the plan — all verified against the
+actually-installed `ras-commander` 0.99.1 API (signatures checked by
+inspecting the installed package directly, not assumed). One piece is
+**not** automatable with this version: `GeomInlineWeir` (the class for the
+breachable inline weir / SA-2D connection that represents the dam
+embankment itself in the 2D flow area) is **read-only** in 0.99.1 — it can
+query an existing structure's profile/gates/weirs, but has no
+create/set methods. So the embankment structure has to be created once, by
+hand, in the HEC-RAS GUI, named to match `ras_project.breach_structure_name
+(dam)` (currently `"{dam.name} Dam"`). Everything downstream of that
+one-time step — computed breach parameters, boundary conditions, mesh,
+execution — is fully automated and re-runnable directly from a `dam.yaml`
+and a `BreachEstimate`, no GUI work needed again. This is the same category
+of necessary human-in-the-loop step as digitizing a reservoir footprint
+polygon would have been before `storage_curve.py`'s flood-fill approach
+made that unnecessary — some CAD/GUI steps aren't safely fakeable and
+shouldn't be papered over.
+
 ## Key decisions and why
 
 **Reusable toolkit, not a one-off script.** Every dam-specific fact lives in

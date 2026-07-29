@@ -49,11 +49,22 @@ docs/                      documentation (this section)
 
 ## Status
 
-Environment (Git, a conda-forge Python env, HEC-RAS 7.0.1) is set up and the
-breach-parameter module (`breach_params.py`) is implemented and tested.
-Terrain ingestion, HEC-RAS automation, GIS post-processing, and map
-rendering are not built yet — see `methodology.md`'s pipeline diagram for
-what's still ahead.
+Environment (Git, a conda-forge Python env, HEC-RAS 7.0.1) is set up, and
+every pipeline stage in `methodology.md`'s diagram is implemented and
+tested: `breach_params.py`, `terrain.py`, `storage_curve.py`,
+`manning_lookup.py`, `ras_project.py`, `postprocess.py`, `structures.py`,
+and `mapping.py`. Each is runnable standalone via a console script
+(`reservoirs-breach-params`, `reservoirs-terrain`, `reservoirs-storage-curve`,
+`reservoirs-manning-lookup`, `reservoirs-structures`, `reservoirs-postprocess`,
+`reservoirs-mapping` — run any with `--help`) except `ras_project.py`, which
+has no single-command CLI because it requires a one-time manual HEC-RAS GUI
+step partway through (see that module's docstring).
+
+What's left before a first real run on either dam: creating that manual
+breach-structure geometry in the HEC-RAS GUI, then running the full chain
+(terrain → breach params → storage curve → 2D flow area/mesh → breach
+structure (manual) → run plan → postprocess → structures/PAR → map) against
+real HEC-RAS output for Loch Lomond and Fall River Reservoir.
 
 ## Adding a new dam
 

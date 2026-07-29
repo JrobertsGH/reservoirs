@@ -12,6 +12,10 @@ requires-python = ">=3.11"
 reservoirs-breach-params = "reservoirs.cli:breach_params_cmd"
 reservoirs-terrain = "reservoirs.cli:terrain_cmd"
 reservoirs-storage-curve = "reservoirs.cli:storage_curve_cmd"
+reservoirs-manning-lookup = "reservoirs.cli:manning_lookup_cmd"
+reservoirs-structures = "reservoirs.cli:structures_cmd"
+reservoirs-postprocess = "reservoirs.cli:postprocess_cmd"
+reservoirs-mapping = "reservoirs.cli:mapping_cmd"
 
 [tool.setuptools.packages.find]
 where = ["src"]

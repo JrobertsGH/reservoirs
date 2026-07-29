@@ -24,3 +24,4 @@ dependencies:
       - ras-commander
       - py3dep
       - pygeohydro
+      - osmnx

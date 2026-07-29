@@ -86,27 +86,46 @@ Each stage is independently runnable (console-script entry points in
 `pyproject.toml`), so a breach-parameter report can be produced and reviewed
 long before anyone touches HEC-RAS.
 
-## One real manual step: the dam embankment structure itself
+## No manual step: the dam embankment structure is scriptable too
 
 `ras_project.py` automates project creation, terrain attachment, 2D flow
-area definition/meshing, applying computed breach parameters, initial/
-boundary conditions, and running the plan — all verified against the
+area definition/meshing, the reservoir Storage Area and its embankment
+Connection, applying computed breach parameters, initial/boundary
+conditions, and running the plan — all verified against the
 actually-installed `ras-commander` 0.99.1 API (signatures checked by
-inspecting the installed package directly, not assumed). One piece is
-**not** automatable with this version: `GeomInlineWeir` (the class for the
-breachable inline weir / SA-2D connection that represents the dam
-embankment itself in the 2D flow area) is **read-only** in 0.99.1 — it can
-query an existing structure's profile/gates/weirs, but has no
-create/set methods. So the embankment structure has to be created once, by
-hand, in the HEC-RAS GUI, named to match `ras_project.breach_structure_name
-(dam)` (currently `"{dam.name} Dam"`). Everything downstream of that
-one-time step — computed breach parameters, boundary conditions, mesh,
-execution — is fully automated and re-runnable directly from a `dam.yaml`
-and a `BreachEstimate`, no GUI work needed again. This is the same category
-of necessary human-in-the-loop step as digitizing a reservoir footprint
-polygon would have been before `storage_curve.py`'s flood-fill approach
-made that unnecessary — some CAD/GUI steps aren't safely fakeable and
-shouldn't be papered over.
+inspecting the installed package directly, not assumed).
+
+An earlier version of this section said the breachable embankment
+structure had to be created by hand in the HEC-RAS GUI, because
+`GeomInlineWeir` (checked at the time) is read-only in 0.99.1. That was
+checking the wrong class: `GeomInlineWeir` parses **1D river-station**
+inline structures, not the Storage-Area-to-2D-Area connection a 2D
+dam-breach model actually needs. `GeomLateral` is the class for that, and
+in the installed version it has full read/write support — `set_connection`,
+`set_connection_profile`, `set_connection_gates`, `delete_connection`, all
+"verified to compute" per its own docstrings against production 2D models.
+`ras_project.create_reservoir_storage_area` (writing the reservoir pool's
+Storage Area block directly, since no public ras-commander method creates
+a plain non-2D storage area) and `create_breach_structure` (wrapping
+`GeomLateral.set_connection`/`set_connection_profile`) use it, so the whole
+chain from `dam.yaml` to a computed plan is scriptable with no GUI step —
+the same resolution `storage_curve.py`'s flood-fill approach already gave
+the reservoir-footprint-digitization concern this section used to also
+cite: the human-in-the-loop step wasn't actually load-bearing, a real write
+API existed, it just hadn't been found yet.
+
+**One real, HEC-RAS-format constraint surfaced while wiring this up**: the
+installed `GeomLateral.set_connection` silently fixed-width-truncates
+Connection names (and its Up/Dn Storage Area references) to 16 characters.
+A name like `"Fall River Reservoir Dam"` (24 chars, `breach_structure_name`'s
+human-readable output) gets silently mangled to `"Fall River Reser"`,
+which then fails to round-trip against its own untruncated Storage Area
+name — caught by actually writing a real connection in a test, not by
+inspection. `ras_project.ras_connection_name(dam)` (e.g. `"Dam 070129"`)
+is the short, always-safe identifier actually used for the geometry-file
+Connection; `create_reservoir_storage_area`/`create_breach_structure` both
+raise `ValueError` rather than silently truncate if a caller passes a name
+over 16 characters for any Storage-Area/Connection role.
 
 ## Key decisions and why
 

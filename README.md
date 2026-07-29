@@ -56,15 +56,29 @@ tested: `breach_params.py`, `terrain.py`, `storage_curve.py`,
 and `mapping.py`. Each is runnable standalone via a console script
 (`reservoirs-breach-params`, `reservoirs-terrain`, `reservoirs-storage-curve`,
 `reservoirs-manning-lookup`, `reservoirs-structures`, `reservoirs-postprocess`,
-`reservoirs-mapping` — run any with `--help`) except `ras_project.py`, which
-has no single-command CLI because it requires a one-time manual HEC-RAS GUI
-step partway through (see that module's docstring).
+`reservoirs-mapping` — run any with `--help`). `ras_project.py` has no
+single-command CLI (it's inherently a multi-step, stateful HEC-RAS project
+build, not a one-shot transform) but no longer needs any manual GUI step
+either — see `methodology.md`'s "No manual step" section.
 
-What's left before a first real run on either dam: creating that manual
-breach-structure geometry in the HEC-RAS GUI, then running the full chain
-(terrain → breach params → storage curve → 2D flow area/mesh → breach
-structure (manual) → run plan → postprocess → structures/PAR → map) against
-real HEC-RAS output for Loch Lomond and Fall River Reservoir.
+Real terrain and a real breach-parameter report have now been produced for
+both dams from their actual 2021 LiDAR surveys. **Known blocker**: the
+elevation-area-storage curve (`storage_curve.py`) can't fully close either
+reservoir's basin from that LiDAR alone — aerial LiDAR can't see through
+standing water, so anything submerged during the Oct 2021 flight is simply
+absent from the DEM, and the dry margin it did capture doesn't fully
+enclose either reservoir's true rim within the survey extent. Confirmed by
+placing the flood-fill seed to test multiple hypotheses, not just the
+default. This needs a bathymetric/sonar survey or a historic
+storage-capacity study to resolve — not something further code changes can
+fix on their own.
+
+What's left before a first real HEC-RAS run: resolve the storage-curve gap
+above (at least well enough to build a defensible reservoir Storage Area
+rating curve), then run the full chain (terrain → breach params → storage
+curve → 2D flow area/mesh → reservoir Storage Area → breach structure →
+run plan → postprocess → structures/PAR → map) for real for Loch Lomond and
+Fall River Reservoir.
 
 ## Adding a new dam
 

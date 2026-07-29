@@ -127,5 +127,20 @@ terrain_sources:
   - path: "\\\\ORION\\Departments\\Engineering\\RESERVOIRS\\ADRC- Reservoirs\\Loch Lomond\\Topo-2021\\CCLiDAR_LochLomond_20211018-20211027T165546Z-001\\CCLiDAR_LochLomond_20211018\\AW_CCLiDAR_LochLomond_20211018_ALL_POINTS.csv"
     kind: "lidar_points_csv"
     description: "2021 aerial LiDAR, raw point cloud"
+  # 2022-10-04 bathymetric (submerged lakebed) survey, 1321 points (718 BTM
+  # bottom soundings, elevation range 11124-11203 ft, matching this dam's
+  # real crest elevation of 11200 ft). Found in C:\Users\jroberts\Downloads\
+  # under the filename LOCH_LOMOND_TOPO_10042022.csv -- previously flagged
+  # in docs/data_sources.md as ambiguous alongside genuinely-unrelated
+  # Grand-County files in the same batch, and NOT that (see
+  # docs/audit_trail.md's 2026-07-29 correction): its x/y columns are
+  # swapped relative to (Easting, Northing) convention, but once swapped,
+  # its points fall exactly inside this dam's own 2021 LiDAR survey extent
+  # and its centroid lands within ~0.15 mi of this dam's location above.
+  # Not yet moved onto \\ORION -- still referenced at its local path;
+  # recommend moving it onto the network share for durability.
+  - path: "C:\\Users\\jroberts\\Downloads\\LOCH_LOMOND_TOPO_10042022.csv"
+    kind: "bathymetry_points_csv"
+    description: "2022-10-04 bathymetric survey, submerged lakebed soundings (x/y swapped, see note above)"
 
 preliminary: true

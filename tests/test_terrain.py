@@ -5,12 +5,16 @@ import numpy as np
 import pandas as pd
 import pytest
 import rasterio
+from rasterio.transform import from_origin
 
 from reservoirs.config import DamConfig, HazardClass, Location
 from reservoirs.terrain import (
     bounding_box_miles,
     build_terrain_from_lidar,
+    build_terrain_from_lidar_and_bathymetry,
     dam_data_dir,
+    extract_crest_alignment,
+    load_bathymetry_points_csv,
     load_lidar_points_csv,
     points_to_grid,
     write_terrain_geotiff,
@@ -135,6 +139,152 @@ class TestBuildTerrainFromLidar:
         out_path = build_terrain_from_lidar(dam, cell_size_ft=10.0, out_dir=tmp_path / "out")
         with rasterio.open(out_path) as src:
             assert src.width >= 10  # spans the merged 0..100 extent, not just one half
+
+
+def write_bathymetry_csv(path, points, swapped=True):
+    """points: list of (x, y, z, description) tuples in true (Easting, Northing, Z).
+    Writes with columns swapped if swapped=True, matching the real survey's
+    quirk that load_bathymetry_points_csv(swap_xy=True) corrects for.
+    """
+    rows = []
+    for i, (x, y, z, desc) in enumerate(points):
+        row = {"id": i, "z": z, "description": desc}
+        if swapped:
+            row["x"], row["y"] = y, x
+        else:
+            row["x"], row["y"] = x, y
+        rows.append(row)
+    pd.DataFrame(rows).to_csv(path, index=False)
+    return path
+
+
+class TestLoadBathymetryPointsCsv:
+    def test_keeps_only_bottom_points_by_default(self, tmp_path):
+        path = write_bathymetry_csv(
+            tmp_path / "bathy.csv",
+            [(0.0, 0.0, 100.0, "BTM"), (1.0, 1.0, 105.0, ""), (2.0, 2.0, 98.0, "BTM")],
+        )
+        df = load_bathymetry_points_csv(path)
+        assert len(df) == 2
+        assert list(df.columns) == ["X", "Y", "Z"]
+
+    def test_keeps_all_points_when_bottom_only_false(self, tmp_path):
+        path = write_bathymetry_csv(
+            tmp_path / "bathy.csv",
+            [(0.0, 0.0, 100.0, "BTM"), (1.0, 1.0, 105.0, "")],
+        )
+        df = load_bathymetry_points_csv(path, bottom_only=False)
+        assert len(df) == 2
+
+    def test_swap_xy_corrects_columns(self, tmp_path):
+        # true point is (Easting=5.0, Northing=9.0); written with columns swapped
+        path = write_bathymetry_csv(tmp_path / "bathy.csv", [(5.0, 9.0, 100.0, "BTM")], swapped=True)
+        df = load_bathymetry_points_csv(path, swap_xy=True)
+        assert df.iloc[0]["X"] == 5.0
+        assert df.iloc[0]["Y"] == 9.0
+
+    def test_swap_xy_false_takes_columns_as_written(self, tmp_path):
+        path = write_bathymetry_csv(tmp_path / "bathy.csv", [(5.0, 9.0, 100.0, "BTM")], swapped=False)
+        df = load_bathymetry_points_csv(path, swap_xy=False)
+        assert df.iloc[0]["X"] == 5.0
+        assert df.iloc[0]["Y"] == 9.0
+
+    def test_missing_column_raises(self, tmp_path):
+        path = tmp_path / "bad.csv"
+        pd.DataFrame({"x": [0], "y": [0]}).to_csv(path, index=False)
+        with pytest.raises(ValueError, match="missing expected columns"):
+            load_bathymetry_points_csv(path)
+
+
+class TestBuildTerrainFromLidarAndBathymetry:
+    def test_raises_without_bathymetry_source(self, tmp_path):
+        csv_path = write_points_csv(tmp_path / "points.csv", [(0, 0, 11400.0), (10, 10, 11400.0)])
+        dam = make_dam(terrain_sources=[{"path": str(csv_path), "kind": "lidar_points_csv"}])
+        with pytest.raises(ValueError, match="no 'bathymetry_points_csv'"):
+            build_terrain_from_lidar_and_bathymetry(dam)
+
+    def test_raises_without_lidar_source(self, tmp_path):
+        bathy_path = write_bathymetry_csv(tmp_path / "bathy.csv", [(0.0, 0.0, 11100.0, "BTM")])
+        dam = make_dam(terrain_sources=[{"path": str(bathy_path), "kind": "bathymetry_points_csv"}])
+        with pytest.raises(ValueError, match="no 'lidar_points_csv'"):
+            build_terrain_from_lidar_and_bathymetry(dam)
+
+    def test_merges_lidar_and_bathymetry_into_one_terrain(self, tmp_path):
+        # LiDAR covers the dry rim (a ring around a "lake"); bathymetry fills the
+        # submerged low center that LiDAR alone would leave as a hole.
+        lidar_points = [(x, y, 11200.0) for x in range(0, 101, 10) for y in (0, 100)]
+        lidar_points += [(x, y, 11200.0) for x in (0, 100) for y in range(0, 101, 10)]
+        csv_path = write_points_csv(tmp_path / "lidar.csv", lidar_points)
+
+        bathy_points = [(50.0, 50.0, 11150.0, "BTM"), (40.0, 60.0, 11155.0, "BTM")]
+        bathy_path = write_bathymetry_csv(tmp_path / "bathy.csv", bathy_points, swapped=False)
+
+        dam = make_dam(
+            terrain_sources=[
+                {"path": str(csv_path), "kind": "lidar_points_csv"},
+                {"path": str(bathy_path), "kind": "bathymetry_points_csv"},
+            ]
+        )
+        out_path = build_terrain_from_lidar_and_bathymetry(
+            dam, cell_size_ft=10.0, out_dir=tmp_path / "out", swap_bathymetry_xy=False
+        )
+
+        assert out_path.exists()
+        with rasterio.open(out_path) as src:
+            data = src.read(1)
+            # the center, informed by the bathymetric low points, should be
+            # lower than the LiDAR-only rim elevation
+            assert data.min() < 11200.0
+
+
+class TestExtractCrestAlignment:
+    def _dam_and_ridge_terrain(self, tmp_path, crest_elevation_ft=10841.0):
+        from pyproj import Transformer
+
+        lat, lon = 39.82, -105.69
+        dam = make_dam(location=Location(latitude=lat, longitude=lon), crest_elevation_ft=crest_elevation_ft)
+
+        transformer = Transformer.from_crs("EPSG:4326", "EPSG:2232", always_xy=True)
+        dam_x, dam_y = transformer.transform(lon, lat)
+
+        size = 200
+        cell_size_ft = 5.0
+        origin_x = dam_x - (size / 2) * cell_size_ft
+        origin_y = dam_y + (size / 2) * cell_size_ft
+        transform = from_origin(origin_x, origin_y, cell_size_ft, cell_size_ft)
+
+        # background valley below crest, with a diagonal ridge (>= crest) through the center
+        elevation = np.full((size, size), crest_elevation_ft - 20.0, dtype="float32")
+        for i in range(size):
+            for offset in range(-2, 3):
+                col = i + offset
+                if 0 <= col < size:
+                    elevation[i, col] = crest_elevation_ft + 5.0
+
+        path = tmp_path / "ridge_terrain.tif"
+        with rasterio.open(
+            path, "w", driver="GTiff", height=size, width=size, count=1,
+            dtype="float32", crs="EPSG:2232", transform=transform, nodata=np.nan,
+        ) as dst:
+            dst.write(elevation, 1)
+        return dam, path
+
+    def test_extracts_two_endpoints_spanning_the_ridge(self, tmp_path):
+        dam, path = self._dam_and_ridge_terrain(tmp_path)
+
+        endpoints = extract_crest_alignment(path, dam, search_radius_ft=400.0)
+
+        assert len(endpoints) == 2
+        length = math.dist(endpoints[0], endpoints[1])
+        assert length > 300  # ridge should span a substantial fraction of the search window
+
+    def test_raises_when_no_crest_height_cells_nearby(self, tmp_path):
+        # ridge tops out at crest_elevation_ft + 5; ask for a crest far above that
+        dam, path = self._dam_and_ridge_terrain(tmp_path, crest_elevation_ft=10841.0)
+        dam = dam.model_copy(update={"crest_elevation_ft": 99999.0})
+
+        with pytest.raises(ValueError, match="No terrain cells at or above crest"):
+            extract_crest_alignment(path, dam, search_radius_ft=100.0)
 
 
 class TestBoundingBoxMiles:

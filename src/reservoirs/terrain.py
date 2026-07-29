@@ -47,6 +47,43 @@ def load_lidar_points_csv(path: str | Path) -> pd.DataFrame:
     return df
 
 
+def load_bathymetry_points_csv(
+    path: str | Path,
+    swap_xy: bool = True,
+    bottom_only: bool = True,
+    bottom_description: str = "BTM",
+) -> pd.DataFrame:
+    """Load a bathymetric (submerged lakebed) survey CSV: columns id, x, y,
+    z, description, with bottom-sounding points marked `description="BTM"`.
+
+    Aerial LiDAR can't see through standing water, so it only captures a
+    reservoir's dry margin above the survey-date water line -- this is the
+    complementary data source for the submerged floor (see
+    docs/audit_trail.md's storage-curve-gap entry). Returns columns X, Y, Z
+    (uppercase, matching `load_lidar_points_csv`'s convention) for the
+    bottom points only by default; pass `bottom_only=False` to keep
+    non-bottom (e.g. water-surface reference) points too.
+
+    `swap_xy=True` by default: the one bathymetric survey checked so far
+    has its x/y columns swapped relative to (Easting, Northing) convention
+    -- confirmed by cross-checking against the dam's known lat/lon and its
+    LiDAR survey's real extent, both of which only line up after swapping
+    (see docs/audit_trail.md). Verify against a specific survey's own
+    metadata before assuming this holds for a different one.
+    """
+    df = pd.read_csv(path)
+    expected = {"x", "y", "z"}
+    missing = expected - set(df.columns)
+    if missing:
+        raise ValueError(f"{path}: missing expected columns {sorted(missing)}")
+
+    if bottom_only and "description" in df.columns:
+        df = df[df["description"] == bottom_description]
+
+    x_col, y_col = ("y", "x") if swap_xy else ("x", "y")
+    return df.rename(columns={x_col: "X", y_col: "Y", "z": "Z"})[["X", "Y", "Z"]].reset_index(drop=True)
+
+
 def points_to_grid(
     df: pd.DataFrame,
     cell_size_ft: float = 2.0,
@@ -135,6 +172,48 @@ def build_terrain_from_lidar(
     return write_terrain_geotiff(elevation, transform, out_dir / "terrain_lidar.tif")
 
 
+def build_terrain_from_lidar_and_bathymetry(
+    dam: DamConfig,
+    cell_size_ft: float = 2.0,
+    out_dir: str | Path | None = None,
+    swap_bathymetry_xy: bool = True,
+) -> Path:
+    """Like `build_terrain_from_lidar`, but also merges in the dam's
+    `bathymetry_points_csv` terrain_sources (submerged lakebed soundings)
+    before gridding -- closes the gap where aerial LiDAR alone can't
+    resolve a reservoir's true rim because it can't see through standing
+    water (see docs/audit_trail.md).
+
+    Raises if the dam's config has no `bathymetry_points_csv` source; use
+    `build_terrain_from_lidar` directly if there isn't one.
+    """
+    point_sources = [s for s in dam.terrain_sources if s.kind == "lidar_points_csv"]
+    if not point_sources:
+        raise ValueError(
+            f"{dam.name}: no 'lidar_points_csv' terrain_sources configured -- "
+            "use fetch_public_dem() instead, or add a source."
+        )
+    bathy_sources = [s for s in dam.terrain_sources if s.kind == "bathymetry_points_csv"]
+    if not bathy_sources:
+        raise ValueError(
+            f"{dam.name}: no 'bathymetry_points_csv' terrain_sources configured -- "
+            "use build_terrain_from_lidar() if there's no bathymetric survey on file."
+        )
+
+    lidar_frames = [load_lidar_points_csv(s.path) for s in point_sources]
+    lidar_df = pd.concat(lidar_frames, ignore_index=True) if len(lidar_frames) > 1 else lidar_frames[0]
+    lidar_df = lidar_df[["X", "Y", "Z"]]
+
+    bathy_frames = [load_bathymetry_points_csv(s.path, swap_xy=swap_bathymetry_xy) for s in bathy_sources]
+    bathy_df = pd.concat(bathy_frames, ignore_index=True) if len(bathy_frames) > 1 else bathy_frames[0]
+
+    combined = pd.concat([lidar_df, bathy_df], ignore_index=True)
+    elevation, transform = points_to_grid(combined, cell_size_ft=cell_size_ft)
+
+    out_dir = Path(out_dir) if out_dir is not None else dam_data_dir(dam)
+    return write_terrain_geotiff(elevation, transform, out_dir / "terrain_lidar_bathy.tif")
+
+
 def bounding_box_miles(latitude: float, longitude: float, buffer_mi: float) -> tuple[float, float, float, float]:
     """A rough (xmin, ymin, xmax, ymax) lon/lat box centered on a point.
 
@@ -171,3 +250,73 @@ def fetch_public_dem(
     out_path = out_dir / f"terrain_3dep_{resolution_m}m.tif"
     dem.rio.to_raster(out_path)
     return out_path
+
+
+def extract_crest_alignment(
+    terrain_path: str | Path,
+    dam: DamConfig,
+    search_radius_ft: float = 600.0,
+) -> list[tuple[float, float]]:
+    """Extract a candidate dam-crest alignment polyline from terrain, for
+    `ras_project.create_breach_structure`'s `connection_coords`.
+
+    An intact (unbreached) embankment's own top surface should sit at or
+    above its design crest elevation, distinguishing it from the
+    surrounding valley -- so this finds the connected component of cells
+    with `elevation >= dam.crest_elevation_ft` nearest the dam's `dam.yaml`
+    location, then fits a line through it via PCA and returns that line's
+    two endpoints. Confirmed visually against Fall River Reservoir's real
+    terrain (a distinct ~30-40 ft wide linear ridge, not just an incidental
+    contour crossing) before being written as a general-purpose function --
+    see docs/audit_trail.md.
+
+    This is a heuristic over survey terrain, not a substitute for as-built
+    drawings -- review the result (e.g. plot it over the terrain) before
+    using it in `create_breach_structure`. Raises if no cell at/above crest
+    elevation exists within `search_radius_ft` of the dam's location.
+    """
+    from pyproj import Transformer
+    from scipy import ndimage
+
+    with rasterio.open(terrain_path) as src:
+        elevation = src.read(1)
+        transform = src.transform
+        crs = src.crs
+
+    transformer = Transformer.from_crs("EPSG:4326", crs, always_xy=True)
+    dam_x, dam_y = transformer.transform(dam.location.longitude, dam.location.latitude)
+    dam_col, dam_row = ~transform * (dam_x, dam_y)
+    dam_row, dam_col = int(round(dam_row)), int(round(dam_col))
+
+    cell_size_ft = abs(transform.a)
+    half_cells = int(search_radius_ft / cell_size_ft)
+    r0, r1 = max(0, dam_row - half_cells), min(elevation.shape[0], dam_row + half_cells)
+    c0, c1 = max(0, dam_col - half_cells), min(elevation.shape[1], dam_col + half_cells)
+
+    mask = elevation[r0:r1, c0:c1] >= dam.crest_elevation_ft
+    labeled, n_components = ndimage.label(mask)
+    if n_components == 0:
+        raise ValueError(
+            f"No terrain cells at or above crest elevation ({dam.crest_elevation_ft} ft) within "
+            f"{search_radius_ft} ft of {dam.name}'s dam.yaml location -- widen search_radius_ft, "
+            "or check the location/crest elevation."
+        )
+
+    local_row, local_col = dam_row - r0, dam_col - c0
+    component_label = labeled[local_row, local_col] if mask[local_row, local_col] else 0
+    if component_label == 0:
+        ys, xs = np.where(labeled > 0)
+        nearest = ((ys - local_row) ** 2 + (xs - local_col) ** 2).argmin()
+        component_label = labeled[ys[nearest], xs[nearest]]
+
+    ys, xs = np.where(labeled == component_label)
+    coords = np.column_stack([xs, ys]).astype(float)
+    centroid = coords.mean(axis=0)
+    centered = coords - centroid
+
+    eigvals, eigvecs = np.linalg.eigh(np.cov(centered.T))
+    principal_axis = eigvecs[:, np.argmax(eigvals)]
+    projections = centered @ principal_axis
+
+    endpoints_local = [centroid + principal_axis * projections.min(), centroid + principal_axis * projections.max()]
+    return [transform * (c0 + x, r0 + y) for x, y in endpoints_local]

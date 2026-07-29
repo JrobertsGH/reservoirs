@@ -61,7 +61,11 @@ class TerrainSource(BaseModel):
     """A survey-grade terrain deliverable to ingest ahead of any public-DEM fallback."""
 
     path: str
-    kind: str = Field(description="e.g. 'lidar_contours_dxf', 'lidar_tin_dxf', 'lidar_points_csv'")
+    kind: str = Field(
+        description="e.g. 'lidar_contours_dxf', 'lidar_tin_dxf', 'lidar_points_csv', "
+        "'bathymetry_points_csv' (submerged lakebed soundings -- see terrain.py's "
+        "build_terrain_from_lidar_and_bathymetry)"
+    )
     description: str | None = None
 
 

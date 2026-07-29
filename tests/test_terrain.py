@@ -13,6 +13,7 @@ from reservoirs.terrain import (
     build_terrain_from_lidar,
     build_terrain_from_lidar_and_bathymetry,
     dam_data_dir,
+    estimate_downstream_channel_slope,
     extract_crest_alignment,
     load_bathymetry_points_csv,
     load_lidar_points_csv,
@@ -285,6 +286,54 @@ class TestExtractCrestAlignment:
 
         with pytest.raises(ValueError, match="No terrain cells at or above crest"):
             extract_crest_alignment(path, dam, search_radius_ft=100.0)
+
+
+class TestEstimateDownstreamChannelSlope:
+    def test_recovers_known_slope_downhill_from_crest(self, tmp_path):
+        size = 60
+        cell_size_ft = 10.0
+        known_slope = 0.02  # ft/ft
+        # elevation decreases as row increases (south, i.e. -Y in world coords)
+        elevation = np.fromfunction(lambda r, c: 1000.0 - r * cell_size_ft * known_slope, (size, size)).astype(
+            "float32"
+        )
+        transform = from_origin(0, size * cell_size_ft, cell_size_ft, cell_size_ft)
+        path = tmp_path / "slope.tif"
+        with rasterio.open(
+            path, "w", driver="GTiff", height=size, width=size, count=1,
+            dtype="float32", crs="EPSG:2232", transform=transform, nodata=np.nan,
+        ) as dst:
+            dst.write(elevation, 1)
+
+        # crest alignment: a horizontal line at the raster's center row, so its
+        # perpendicular direction runs along the (Y-direction) slope gradient
+        mid_y = transform * (size / 2, size / 2)
+        crest_alignment = [
+            (mid_y[0] - 100.0, mid_y[1]),
+            (mid_y[0] + 100.0, mid_y[1]),
+        ]
+
+        slope = estimate_downstream_channel_slope(path, crest_alignment, sample_distance_ft=200.0, n_samples=50)
+
+        assert slope == pytest.approx(known_slope, rel=0.05)
+
+    def test_raises_when_alignment_runs_off_raster(self, tmp_path):
+        size = 10
+        cell_size_ft = 10.0
+        elevation = np.full((size, size), 100.0, dtype="float32")
+        transform = from_origin(0, size * cell_size_ft, cell_size_ft, cell_size_ft)
+        path = tmp_path / "flat.tif"
+        with rasterio.open(
+            path, "w", driver="GTiff", height=size, width=size, count=1,
+            dtype="float32", crs="EPSG:2232", transform=transform, nodata=np.nan,
+        ) as dst:
+            dst.write(elevation, 1)
+
+        # crest alignment far outside the raster entirely
+        crest_alignment = [(100_000.0, 100_000.0), (100_100.0, 100_000.0)]
+
+        with pytest.raises(ValueError, match="Not enough valid terrain samples"):
+            estimate_downstream_channel_slope(path, crest_alignment, sample_distance_ft=200.0, n_samples=50)
 
 
 class TestBoundingBoxMiles:

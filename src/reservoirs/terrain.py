@@ -320,3 +320,60 @@ def extract_crest_alignment(
 
     endpoints_local = [centroid + principal_axis * projections.min(), centroid + principal_axis * projections.max()]
     return [transform * (c0 + x, r0 + y) for x, y in endpoints_local]
+
+
+def estimate_downstream_channel_slope(
+    terrain_path: str | Path,
+    crest_alignment: list[tuple[float, float]],
+    sample_distance_ft: float = 2000.0,
+    n_samples: int = 100,
+) -> float:
+    """First-pass estimate of the downstream channel's bed slope (ft/ft),
+    for `ras_project.configure_initial_and_boundary_conditions`'s
+    `downstream_friction_slope` -- HEC-RAS's normal-depth boundary
+    approximates the friction slope with the channel bed slope.
+
+    Samples terrain elevation along a line perpendicular to
+    `crest_alignment` (a dam-crest polyline, e.g. from
+    `extract_crest_alignment`), extending in whichever perpendicular
+    direction has lower average elevation (downstream), and fits a linear
+    trend to elevation vs. distance. This is a coarse, terrain-only
+    starting point -- review against actual channel/valley conditions
+    (tailwater effects, channel roughness, downstream constrictions) before
+    trusting it; it does not know about any of those.
+    """
+    with rasterio.open(terrain_path) as src:
+        elevation = src.read(1)
+        transform = src.transform
+
+    (x1, y1), (x2, y2) = crest_alignment[0], crest_alignment[-1]
+    mid_x, mid_y = (x1 + x2) / 2, (y1 + y2) / 2
+    dx, dy = x2 - x1, y2 - y1
+    length = math.hypot(dx, dy)
+    perp = (-dy / length, dx / length)
+
+    def sample_line(direction_sign: float) -> np.ndarray:
+        distances = np.linspace(0, sample_distance_ft, n_samples)
+        xs = mid_x + perp[0] * direction_sign * distances
+        ys = mid_y + perp[1] * direction_sign * distances
+        cols, rows = ~transform * (xs, ys)
+        rows, cols = np.round(rows).astype(int), np.round(cols).astype(int)
+        valid = (rows >= 0) & (rows < elevation.shape[0]) & (cols >= 0) & (cols < elevation.shape[1])
+        return distances[valid], elevation[rows[valid], cols[valid]]
+
+    dist_pos, elev_pos = sample_line(1.0)
+    dist_neg, elev_neg = sample_line(-1.0)
+
+    if len(elev_pos) < 2 and len(elev_neg) < 2:
+        raise ValueError("Not enough valid terrain samples along the downstream direction to estimate a slope.")
+
+    mean_pos = np.mean(elev_pos) if len(elev_pos) > 0 else np.inf
+    mean_neg = np.mean(elev_neg) if len(elev_neg) > 0 else np.inf
+    distances, elevations = (dist_pos, elev_pos) if mean_pos < mean_neg else (dist_neg, elev_neg)
+
+    valid = ~np.isnan(elevations)
+    if valid.sum() < 2:
+        raise ValueError("Not enough valid terrain samples along the downstream direction to estimate a slope.")
+
+    slope, _ = np.polyfit(distances[valid], elevations[valid], 1)
+    return abs(float(slope))

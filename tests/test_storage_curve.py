@@ -9,6 +9,7 @@ from reservoirs.storage_curve import (
     compare_to_reported_storage,
     compute_elevation_area_storage_curve,
     elevation_at_storage,
+    reservoir_footprint_polygon,
     storage_at_elevation,
 )
 
@@ -124,6 +125,50 @@ class TestLookups:
             {"elevation_ft": [100, 110, 120], "area_ac": [1, 1, 1], "storage_ac_ft": [0, 10, 20]}
         )
         assert elevation_at_storage(curve, 15) == pytest.approx(115.0)
+
+
+class TestReservoirFootprintPolygon:
+    def test_returns_polygon_matching_bathtub_footprint(self, tmp_path):
+        path, transform, cell_size_ft = write_bathtub_raster(tmp_path / "bathtub.tif")
+
+        coords = reservoir_footprint_polygon(path, elevation_ft=150.0)
+
+        from shapely.geometry import Polygon
+
+        poly = Polygon(coords)
+        expected_area_ft2 = 10 * 10 * (cell_size_ft**2)  # floor_size=10
+        assert poly.area == pytest.approx(expected_area_ft2, rel=0.05)
+
+    def test_seed_selects_correct_basin(self, tmp_path):
+        n = 30
+        cell_size_ft = 10.0
+        elevation = np.full((n, n), 300.0, dtype="float32")
+        elevation[2:8, 2:8] = 100.0  # basin A
+        elevation[20:26, 20:26] = 100.0  # basin B
+        transform = from_origin(0, n * cell_size_ft, cell_size_ft, cell_size_ft)
+        path = tmp_path / "two_basins.tif"
+        with rasterio.open(
+            path, "w", driver="GTiff", height=n, width=n, count=1,
+            dtype="float32", crs="EPSG:2232", transform=transform, nodata=np.nan,
+        ) as dst:
+            dst.write(elevation, 1)
+
+        seed_x = 4 * cell_size_ft + cell_size_ft / 2
+        seed_y = n * cell_size_ft - (4 * cell_size_ft + cell_size_ft / 2)
+
+        from shapely.geometry import Polygon
+
+        coords = reservoir_footprint_polygon(path, elevation_ft=150.0, seed_xy=(seed_x, seed_y))
+        poly = Polygon(coords)
+        expected_area_ft2 = 6 * 6 * (cell_size_ft**2)
+        assert poly.area == pytest.approx(expected_area_ft2, rel=0.05)
+
+    def test_raises_when_seed_not_flooded(self, tmp_path):
+        path, _, _ = write_bathtub_raster(tmp_path / "bathtub.tif", floor_elev=100.0, wall_elev=200.0)
+
+        # (5.0, 195.0) is within the raster but in the wall (border) region, not the floor
+        with pytest.raises(ValueError, match="not flooded"):
+            reservoir_footprint_polygon(path, elevation_ft=100.0, seed_xy=(5.0, 195.0))
 
 
 class TestAnchorCurveNearCrest:

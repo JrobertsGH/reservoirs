@@ -37,6 +37,50 @@ def _seed_from_xy(elevation: np.ndarray, transform: rasterio.Affine, x: float, y
     return row, col
 
 
+def reservoir_footprint_polygon(
+    terrain_path: str | Path,
+    elevation_ft: float,
+    seed_xy: tuple[float, float] | None = None,
+) -> list[tuple[float, float]]:
+    """Extract the reservoir pool's footprint polygon at a given elevation,
+    via the same flood-fill approach as `compute_elevation_area_storage_curve`
+    -- for use as `ras_project.create_reservoir_storage_area`'s
+    `perimeter_coords`. Returns the exterior ring coordinates of the largest
+    flooded region reachable from the seed (or the terrain's global minimum
+    elevation cell if `seed_xy` is None).
+
+    Raises if the seed cell isn't itself flooded at `elevation_ft` (pick a
+    lower elevation or a different seed), matching
+    `compute_elevation_area_storage_curve`'s seed-validation approach.
+    """
+    from rasterio import features
+    from shapely.geometry import shape
+
+    with rasterio.open(terrain_path) as src:
+        elevation = src.read(1)
+        nodata = src.nodata
+        transform = src.transform
+
+    valid = ~np.isnan(elevation) if nodata is None or np.isnan(nodata) else elevation != nodata
+    elevation = np.where(valid, elevation, np.nan)
+
+    seed = _seed_from_xy(elevation, transform, *seed_xy) if seed_xy is not None else _seed_from_min_elevation(elevation)
+
+    flooded_mask = valid & (elevation <= elevation_ft)
+    labeled, _ = ndimage.label(flooded_mask)
+    seed_label = labeled[seed]
+    if seed_label == 0:
+        raise ValueError(f"Seed {seed_xy or 'at the terrain global minimum'} is not flooded at {elevation_ft} ft.")
+
+    basin = (labeled == seed_label).astype("uint8")
+    polygons = [shape(geom) for geom, value in features.shapes(basin, mask=basin.astype(bool), transform=transform) if value == 1]
+    if not polygons:
+        raise ValueError(f"No flooded polygon found at {elevation_ft} ft.")
+
+    largest = max(polygons, key=lambda p: p.area)
+    return list(largest.exterior.coords)
+
+
 def compute_elevation_area_storage_curve(
     terrain_path: str | Path,
     seed_xy: tuple[float, float] | None = None,

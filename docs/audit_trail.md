@@ -195,6 +195,115 @@ the recommended path to a defensible final figure. See commit `ed8f80a`
 and `data_sources.md`'s "Known data-quality issue" section for the full
 writeup.
 
+## 2026-07-29 — `normal_pool_elevation_ft`: sourced from each dam's EIR, not guessed
+
+Added the field (noted as missing above) to `DamConfig`. Rather than derive
+a value from the DEM-storage-curve match point (a reasonable cross-check,
+but not authoritative), searched each dam's 2025 EIR PDF (in Downloads)
+directly and found an explicit, official freeboard figure for both:
+Fall River Reservoir `FREEBOARD (FT): 6.0`, Loch Lomond `FREEBOARD (FT):
+3.5`. `normal_pool_elevation_ft = crest_elevation_ft - freeboard_ft`:
+**10,835.0 ft** (Fall River) and **11,196.5 ft** (Loch Lomond).
+
+Cross-checking each against its real DEM-derived storage curve at that
+elevation surfaced two different, both-worth-noting outcomes:
+- **Loch Lomond**: DEM storage at 11,196.5 ft is 1,021.7 ac-ft vs. the
+  reported 875 (17% over) -- while the curve actually matches 875 almost
+  exactly a few feet lower, around 11,191.5 ft. Both figures are sourced
+  (one from the EIR, one from real bathymetric survey data); the ~5 ft
+  discrepancy is real and unresolved, flagged in `dam.yaml` for PE
+  attention -- not something to silently pick a winner on.
+- **Fall River Reservoir**: DEM storage at 10,835.0 ft is only 239.5 ac-ft
+  vs. the reported 890 (73% short) -- a *bigger* gap than at crest, where
+  `anchor_curve_near_crest` forces an exact match by construction. This is
+  real, non-anchored DEM data (elevation 10,835 ft sits within the
+  trustworthy, non-boundary-touching range, which extends to ~10,838 ft) --
+  meaning even at normal operating pool, the real 2021 LiDAR terrain can
+  only account for about a quarter of the reservoir's true volume.
+  Consistent with the reservoir having been partially full during the
+  October 2021 flight (aerial LiDAR can't see the submerged portion) --
+  and a concrete illustration that `anchor_curve_near_crest`'s bridged
+  region (10,838-10,841 ft) is a real approximation, not a minor rounding
+  gap. Fall River needs its own bathymetric survey before its curve should
+  be trusted between normal pool and crest.
+
+## 2026-07-29 — First real attempt at building a HEC-RAS project (Fall River Reservoir)
+
+With real terrain, a real anchored storage curve, a real extracted crest
+alignment, and a sourced `normal_pool_elevation_ft` all in hand, attempted
+the actual `ras_project.py` build sequence end-to-end against the real,
+installed HEC-RAS 7.0.1 -- not a synthetic/hypothetical run. Project at
+`dams/fall_river/ras_project/` (gitignored, matching `dams/*/ras_project/`
+in `.gitignore`).
+
+**Succeeded, for real:**
+1. `create_dam_project` -- real project created from the bundled RAS 7.0
+   template, reprojected to EPSG:2232.
+2. `attach_terrain` -- real Terrain.hdf built from
+   `dams/fall_river_reservoir/data/terrain_lidar.tif` (0.27 MB, 18
+   datasets).
+3. `configure_2d_flow_area("Downstream 2D", ...)` -- using
+   `flow_area_perimeter_from_terrain` (the terrain's full bounding
+   rectangle -- see caveat below).
+4. `create_reservoir_storage_area("Fall River Pool", ...)` using
+   `storage_curve.reservoir_footprint_polygon` (new function, added this
+   session) at `normal_pool_elevation_ft`, seeded inside the real pool --
+   1,613 boundary vertices (the raw pixel-traced outline at 2ft
+   resolution; should be simplified before a real submission, not blocking
+   for this attempt). Its elevation-volume curve was set from the real
+   anchored storage curve, thinned to 20 points via
+   `np.linspace`-with-both-endpoints (an earlier naive positional-stride
+   thinning attempt missed the crest endpoint entirely -- caught by
+   checking `GeomStorage.get_storage_areas`'s `MaxElev` output against the
+   expected crest elevation, not assumed).
+5. `create_breach_structure` -- real Connection ("Dam 070129") from "Fall
+   River Pool" to "Downstream 2D", using the real extracted crest
+   alignment. Verified via `GeomLateral.get_connections`.
+6. Computed real breach parameters (Froehlich 2008, piping,
+   `max_storage_ac_ft_or_normal` = 1050 ac-ft): Bavg 91.2 ft, Tf 0.246 hr,
+   ER/Hw 4.36.
+
+**Two new gaps found by actually trying, not by inspection:**
+
+1. **`init_ras_project`'s version string must match the installed HEC-RAS
+   build exactly.** The bundled RAS 7.0 *template* (used by
+   `create_dam_project`/`attach_terrain`) is unrelated to the installed
+   *executable*'s version -- this machine has HEC-RAS **7.0.1** installed
+   at `C:\Program Files (x86)\HEC\HEC-RAS\7.0.1\Ras.exe`, and passing the
+   template's `"7.0"` to `init_ras_project` fails to find it ("Ras.exe not
+   found at expected path"). Passing `"7.0.1"` (the exact installed
+   version, from `Get-ChildItem 'C:\Program Files (x86)\HEC\HEC-RAS'`)
+   resolves it correctly. Not a code bug -- `create_dam_project`'s
+   `ras_version="7.0"` default is correct and unrelated; this is purely a
+   call-site detail for whoever runs `init_ras_project`, documented in
+   `user_guide.md`.
+2. **No automatable path exists (yet) to create a Plan file or Unsteady
+   Flow file from scratch.** `ras_project.configure_initial_and_boundary_
+   conditions` and `apply_breach_parameters` both assume a plan/unsteady
+   file already exists (they only *modify* one, via `RasUnsteady.set_*`/
+   `RasBreach.*`) -- confirmed by checking: the bundled RAS 7.0 template
+   ships **only** a blank geometry (no `.pXX`/`.uXX` files at all, verified
+   by listing `ras_commander`'s `resources/templates/RAS_7.0/` directory
+   directly), and `RasPlan`/`RasUnsteady`'s only creation-adjacent methods
+   are `clone_plan`/`clone_unsteady` (copy an *existing* plan/unsteady --
+   nothing to clone from here). This is the one piece of the pipeline
+   still genuinely blocked, and unlike the breach-structure discovery
+   earlier this session, checking harder didn't turn up an existing write
+   API -- it isn't there. Two ways forward, not yet decided: (a) write a
+   new, carefully-verified minimal Plan-file/Unsteady-file writer (same
+   rigor as `create_reservoir_storage_area`'s from-scratch text writer),
+   or (b) create a blank plan + unsteady file once by hand in the HEC-RAS
+   GUI (a much smaller one-time step than the embankment structure used to
+   be, since geometry/breach/IC-BC would still all be scripted from there).
+
+**Known simplification, not yet refined:** the 2D Flow Area's perimeter is
+the terrain's full bounding rectangle, which geometrically overlaps the
+reservoir Storage Area's footprint rather than being clipped to strictly
+the downstream side of the crest alignment. Acceptable for proving the
+automation chain works; should be refined (clip the 2D perimeter to the
+downstream half using the extracted crest alignment) before this feeds a
+real hydraulic run.
+
 ## 2026-07-29 — Loch Lomond's storage-curve gap resolved via real bathymetry
 
 Following up on the storage-curve gap documented above, the user directed

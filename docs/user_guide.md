@@ -156,6 +156,35 @@ and gives a nonsensical cross-check (thousands of percent off) — pass
 `--seed-x`/`--seed-y` for a point you know is inside the actual reservoir
 pool (e.g. a bathymetric survey's deepest point, if one exists).
 
+**Getting the reservoir's actual footprint polygon** (not just the
+elevation-area-storage numbers) for `ras_project.create_reservoir_
+storage_area`'s `perimeter_coords`: `storage_curve.reservoir_footprint_
+polygon(terrain_path, elevation_ft, seed_xy=...)` runs the same flood-fill
+and returns the exterior ring coordinates directly. The result is the raw
+pixel-traced outline (thousands of vertices at 2ft resolution) —
+`shapely`'s `.simplify()` before using it in a real HEC-RAS project, not
+blocking for a first attempt.
+
+### 2.3b Dam-crest alignment and downstream channel slope
+
+Two more terrain-derived helpers feed `ras_project.py`'s later steps:
+
+- `terrain.extract_crest_alignment(terrain_path, dam, search_radius_ft=600.0)`
+  — finds the connected ridge of terrain cells at/above the dam's crest
+  elevation nearest its `dam.yaml` location and fits a line through it,
+  returning the two endpoints as a candidate `connection_coords` for
+  `create_breach_structure`. Review the result visually (plot it over the
+  terrain) before trusting it — it's a heuristic over survey data, not
+  as-built drawings.
+- `terrain.estimate_downstream_channel_slope(terrain_path, crest_alignment, sample_distance_ft=2000.0)`
+  — a first-pass estimate of the downstream channel's bed slope (ft/ft),
+  for `configure_initial_and_boundary_conditions`'s `downstream_friction_
+  slope` (HEC-RAS's normal-depth boundary approximates friction slope with
+  bed slope). Samples terrain perpendicular to the crest alignment on
+  whichever side is lower (downstream) and fits a linear trend. Coarse and
+  terrain-only — it doesn't know about tailwater effects or channel
+  roughness, so treat it as a starting point, not a final value.
+
 ### 2.4 Manning's n (optional, informational only right now)
 
 ```
@@ -170,43 +199,57 @@ sanity-checking that assumption.
 ### 2.5 HEC-RAS project setup — Python/notebook, not a single CLI command
 
 `ras_project.py` has no console script because it's an inherently
-multi-step, stateful build (create project → attach terrain → define the
-2D flow area → create the reservoir Storage Area → create the breach
-Connection → apply computed breach parameters → set initial/boundary
-conditions → mesh → run), not a one-shot transform. Drive it from a short
-Python script or notebook, e.g.:
+multi-step, stateful build, not a one-shot transform. The sequence below
+is **verified against a real run** against Fall River Reservoir's actual
+data on this machine's installed HEC-RAS 7.0.1 (see
+[`audit_trail.md`](audit_trail.md) for the full account, including two
+gaps found only by actually running it — read those before relying on
+this being copy-paste-to-a-finished-model):
 
 ```python
 from reservoirs.config import load_dam_config, FailureMode
 from reservoirs.breach_params import estimate_all_methods
+from reservoirs.storage_curve import reservoir_footprint_polygon
+from reservoirs.terrain import extract_crest_alignment
 from reservoirs import ras_project as rp
+import pandas as pd
+import numpy as np
 
 dam = load_dam_config("dams/fall_river/dam.yaml")
+terrain_path = "dams/fall_river_reservoir/data/terrain_lidar.tif"  # note the _reservoir suffix -- see §2.1's gotcha
 
-project_folder = rp.create_dam_project(dam, dest_dir="ras_projects")
-geom_file = project_folder / "..."  # the project's .g01, per ras-commander's project object
+prj_path = rp.create_dam_project(dam, dest_dir="dams/fall_river/ras_project", crs="EPSG:2232")
+project_folder = prj_path.parent
+geom_file = project_folder / f"{prj_path.stem}.g01"
 
-rp.attach_terrain(project_folder, ["dams/fall_river_reservoir/data/terrain_lidar.tif"], "path/to/projection.prj")
+rp.attach_terrain(project_folder, [terrain_path], project_folder / f"{prj_path.stem}.projection.prj")
 
 flow_area_name = "Downstream 2D"          # <=16 chars -- see the gotcha below
 storage_area_name = "Fall River Pool"     # <=16 chars
 
 rp.configure_2d_flow_area(geom_file, flow_area_name, rp.flow_area_perimeter_from_terrain(terrain_path))
-rp.create_reservoir_storage_area(geom_file, storage_area_name, reservoir_perimeter_coords)
-# GeomStorage.set_elevation_volume(geom_file, storage_area_name, elevations, volumes) next,
-# using storage_curve.py's output for the reservoir footprint's elevation/volume columns
+# NOTE: this perimeter is the terrain's full bounding rectangle, which overlaps
+# the reservoir footprint below rather than being clipped to just downstream of
+# the dam -- a known simplification (see audit_trail.md), refine before a real run.
 
-rp.create_breach_structure(geom_file, dam, dam_crest_alignment_coords, storage_area_name, flow_area_name)
+seed_xy = (2946045.22, 1723847.37)  # a point known to be inside the real pool -- see §2.3
+footprint = reservoir_footprint_polygon(terrain_path, dam.normal_pool_elevation_ft, seed_xy=seed_xy)
+rp.create_reservoir_storage_area(geom_file, storage_area_name, footprint)
+
+curve = pd.read_csv("dams/fall_river_reservoir/data/storage_curve_anchored.csv")
+curve = curve[curve.elevation_ft <= dam.crest_elevation_ft].reset_index(drop=True)
+idx = sorted(set(np.linspace(0, len(curve) - 1, 20).round().astype(int)))  # keep both endpoints -- see the gotcha below
+thin = curve.iloc[idx]
+import ras_commander as rc
+rc.GeomStorage.set_elevation_volume(geom_file, storage_area_name, thin.elevation_ft.tolist(), thin.storage_ac_ft.tolist())
+
+crest_alignment = extract_crest_alignment(terrain_path, dam, search_radius_ft=600.0)
+rp.create_breach_structure(geom_file, dam, crest_alignment, storage_area_name, flow_area_name)
 
 estimates = estimate_all_methods(dam, FailureMode.piping, dam.max_storage_ac_ft_or_normal)
-rp.apply_breach_parameters(
-    plan_number, rp.ras_connection_name(dam), estimates["froehlich_2008"],
-    breach_bottom_elev_ft=..., weir_top_elev_ft=dam.crest_elevation_ft,
-)
-
-rp.configure_initial_and_boundary_conditions(unsteady_file, flow_area_name, normal_pool_elev_ft=..., downstream_friction_slope=...)
-rp.generate_mesh(geom_number, cell_size_ft=...)
-rp.run_plan(plan_number)
+# rp.apply_breach_parameters(...) and everything past this point needs a real plan/unsteady
+# file to attach to -- see the "blocked" gotcha below; this is as far as verified automation
+# currently reaches.
 ```
 
 **Gotcha — 16-character name limit.** Any name you pass as a Storage Area
@@ -217,6 +260,38 @@ silent round-trip bug during development (see `audit_trail.md`).
 `create_reservoir_storage_area`/`create_breach_structure` raise
 `ValueError` instead of truncating if you pass something too long — pick
 short names (`"Fall River Pool"`, `"Dam 070129"`) from the start.
+
+**Gotcha — thin the storage curve with both endpoints kept.** A naive
+`df.iloc[::20]` positional stride can miss the crest-elevation row
+entirely, silently giving the Storage Area a rating curve that doesn't
+actually reach crest. Use `np.linspace(0, len(df)-1, n).round()` (as
+above) so both ends are always included — verify with
+`GeomStorage.get_storage_areas(...)['MaxElev']` after setting it, don't
+assume.
+
+**Gotcha — `init_ras_project`'s version string must match the installed
+HEC-RAS build exactly**, not just the template version. On this machine,
+HEC-RAS 7.0.1 is installed at `C:\Program Files (x86)\HEC\HEC-RAS\7.0.1\`
+— passing `"7.0"` to `rc.init_ras_project(...)` fails to find `Ras.exe`
+("not found at expected path"); pass `"7.0.1"` (check
+`Get-ChildItem 'C:\Program Files (x86)\HEC\HEC-RAS'` for the exact
+installed version on any given machine). This is unrelated to
+`create_dam_project`'s `ras_version="7.0"` default, which selects a
+bundled *template* and is correct as-is.
+
+**Blocked — no Plan or Unsteady Flow file creation exists yet.**
+`apply_breach_parameters` and `configure_initial_and_boundary_conditions`
+both *modify* an existing plan/unsteady file; neither `ras_project.py` nor
+the installed `ras-commander` (no bundled template, no `clone`-from-nothing
+option — confirmed by checking directly, not assumed) can create one from
+scratch. This is the one remaining gap before `generate_mesh`/`run_plan`
+can be reached for real. Two ways forward: write a new, carefully-verified
+minimal Plan/Unsteady file writer (matching the rigor
+`create_reservoir_storage_area` used), or create a blank plan + unsteady
+file once by hand in the HEC-RAS GUI — a much smaller one-time step than
+the embankment structure used to be, since everything else (geometry,
+breach, IC/BC) is still scripted from there. Not yet decided — see
+`audit_trail.md`.
 
 **Reminder**: always pass `ras_project.ras_connection_name(dam)` — not
 `breach_structure_name(dam)` — anywhere the actual HEC-RAS geometry file
@@ -290,25 +365,40 @@ item below:
   (`terrain.extract_crest_alignment`) and visually confirmed. Not yet done
   for Loch Lomond.
 - ✅ Fall River's `max_storage_ac_ft: 1050` — confirmed by the owner.
+- ✅ `normal_pool_elevation_ft` — added to `DamConfig`, sourced from each
+  dam's own EIR (`FREEBOARD` field), not guessed: 10,835.0 ft (Fall River),
+  11,196.5 ft (Loch Lomond). Loch Lomond's real numbers show concretely why
+  the field matters: DEM-derived storage matches the reported figure to
+  within 1% a few feet away from this value, but is 17% off *at* it —
+  a real, unresolved discrepancy, not a bug (see `audit_trail.md`).
+- ✅ A first real HEC-RAS project build was attempted for Fall River
+  Reservoir — project creation, terrain attachment, 2D flow area, the
+  reservoir Storage Area (real footprint + real elevation-volume curve),
+  and the breach Connection (real crest alignment + real Froehlich 2008
+  parameters) all succeeded for real. See §2.5 for the verified sequence.
+- ✅ A first-pass downstream friction-slope estimate
+  (`terrain.estimate_downstream_channel_slope`) is available, computed
+  directly from real terrain along the channel perpendicular to the crest
+  alignment — review before trusting (it doesn't know about tailwater
+  effects or channel roughness), but it's a real number, not a bare guess.
 
 **Still needed before a real HEC-RAS run:**
-1. **A `normal_pool_elevation_ft` field** — `config.py`'s `DamConfig`
-   doesn't have one yet. Loch Lomond's real numbers now show concretely why
-   it matters: DEM-derived storage matches the reported figure to within
-   1% near ~11,192 ft but is 29% off at crest (11,200 ft) — almost
-   certainly because normal pool sits a few feet below crest, and the
-   cross-check currently compares at crest for lack of anywhere else to
-   compare. Needed both for this and for the sunny-day initial condition
-   (`configure_initial_and_boundary_conditions`).
-2. **Mesh cell size and boundary-condition values** (downstream friction
-   slope, tailwater assumptions) — engineering judgment calls that
-   `ras_project.py` takes as parameters rather than assumes.
-3. Then: build the project (§2.5) — using the anchored/bathymetry-merged
-   storage curve and the extracted crest alignment as inputs — run the
-   plan in the installed HEC-RAS 7.0.1, and run `reservoirs-postprocess` →
-   `reservoirs-structures` → `reservoirs-mapping` against its real output.
+1. **Plan and Unsteady Flow file creation** — genuinely blocked, not just
+   undone. Neither `ras_project.py` nor `ras-commander` can create either
+   file from scratch (only modify an existing one) — see §2.5's "Blocked"
+   gotcha and `audit_trail.md` for the full account of what was checked.
+   Needs a decision: write a new file-writer, or create a blank plan +
+   unsteady once by hand in the GUI.
+2. **Mesh cell size** — still an engineering judgment call
+   `ras_project.py` takes as a parameter rather than assumes.
+3. **Refine the 2D Flow Area perimeter** — currently the terrain's full
+   bounding rectangle (overlaps the reservoir footprint); should be clipped
+   to strictly downstream of the crest alignment before a real run.
+4. Then: finish the project build (§2.5), run the plan in the installed
+   HEC-RAS 7.0.1, and run `reservoirs-postprocess` → `reservoirs-structures`
+   → `reservoirs-mapping` against its real output.
 
 Every output from that chain is still preliminary per
 [`preliminary_disclaimer.md`](preliminary_disclaimer.md) until a PE signs
-off on the anchored curve, the extracted crest alignment, and the values
-chosen in step 2 above.
+off on the anchored curve, the extracted crest alignment, the sourced
+`normal_pool_elevation_ft`, and the values chosen above.

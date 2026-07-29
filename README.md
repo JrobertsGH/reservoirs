@@ -87,16 +87,29 @@ routes:
 
 A candidate dam-crest alignment (needed for `ras_project.
 create_breach_structure`) has also been extracted from Fall River's real
-terrain and visually confirmed (`terrain.extract_crest_alignment`) — see
-`docs/audit_trail.md` for both.
+terrain and visually confirmed (`terrain.extract_crest_alignment`), and
+`DamConfig` now has a `normal_pool_elevation_ft` field sourced from each
+dam's own EIR freeboard figure (not guessed).
 
-What's left before a first real HEC-RAS run: a `normal_pool_elevation_ft`
-schema field (Loch Lomond's real numbers now show why it matters — the
-curve matches almost exactly at normal pool but not at crest), then
-building and running the full chain (terrain → breach params → storage
-curve → 2D flow area/mesh → reservoir Storage Area → breach structure →
-run plan → postprocess → structures/PAR → map) for real, starting with
-Fall River Reservoir or Loch Lomond — both now have workable inputs.
+**A first real HEC-RAS project build has been attempted** for Fall River
+Reservoir, against the real, installed HEC-RAS 7.0.1 — not a hypothetical
+run. Project creation, terrain attachment, the 2D flow area, the reservoir
+Storage Area (real footprint + real elevation-volume curve), and the
+breach Connection (real crest alignment + real computed breach parameters)
+all succeeded. Two gaps were found by actually trying, not by inspection:
+`init_ras_project` needs the exact installed HEC-RAS version string
+(`"7.0.1"`, not the template's `"7.0"`), and — genuinely blocked, not just
+undone — neither this toolkit nor the installed `ras-commander` can create
+a Plan or Unsteady Flow file from scratch (only modify an existing one).
+See `docs/audit_trail.md` and `docs/user_guide.md` §2.5 for the full,
+verified sequence and both gaps.
+
+What's left before a real run: resolve the Plan/Unsteady-file gap (write a
+new file-writer, or create a blank one once by hand in the GUI), pick a
+mesh cell size, refine the 2D Flow Area's perimeter (currently the full
+terrain bounding rectangle, not yet clipped to downstream of the dam), then
+run the plan and the rest of the chain (postprocess → structures/PAR →
+map) for real.
 
 ## Adding a new dam
 

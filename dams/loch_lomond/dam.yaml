@@ -38,6 +38,16 @@ crest_elevation_ft: 11200.0
 normal_storage_ac_ft: 875.0
 surface_area_ac: 31.0
 
+# = crest_elevation_ft - 3.5 ft freeboard, per LochLomond_EIR-20250716.pdf's own
+# "FREEBOARD (FT): 3.5" field (2026-07-29). NOTE: the real (bathymetry-merged)
+# DEM-derived storage curve gives ~1021.7 ac-ft at this elevation -- 17% over
+# the reported 875 ac-ft normal storage -- while the curve actually matches
+# 875 ac-ft almost exactly a few feet lower, around 11,191.5 ft. Both figures
+# are sourced (one from the EIR, one from real bathymetric survey data); the
+# ~5 ft discrepancy between them is unresolved and needs PE attention before
+# either is treated as final. See docs/audit_trail.md.
+normal_pool_elevation_ft: 11196.5
+
 # NOTE (updated 2026-07-29, STILL UNVERIFIED -- needs PE sign-off): state
 # record's 685 sq mi (438,400 ac) figure confirmed implausible; provisionally
 # replaced below with a preliminary re-delineated estimate. Evidence trail:

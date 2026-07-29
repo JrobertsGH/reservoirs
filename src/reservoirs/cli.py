@@ -140,7 +140,11 @@ def storage_curve_cmd(argv: list[str] | None = None) -> None:
     print(f"Wrote storage curve ({len(curve)} rows): {out_path}")
 
     if dam is not None and not args.anchor_near_crest:
-        for warning in compare_to_reported_storage(curve, dam.crest_elevation_ft, dam.normal_storage_ac_ft):
+        # Compare at normal pool (spillway crest) when known -- comparing at
+        # dam crest instead can look like a large mismatch that's actually
+        # just the wrong elevation, not a real problem (see docs/audit_trail.md).
+        compare_elev = dam.normal_pool_elevation_ft if dam.normal_pool_elevation_ft is not None else dam.crest_elevation_ft
+        for warning in compare_to_reported_storage(curve, compare_elev, dam.normal_storage_ac_ft):
             print(f"WARNING: {warning}")
 
 

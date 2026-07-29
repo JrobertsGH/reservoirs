@@ -93,6 +93,16 @@ class DamConfig(BaseModel):
 
     spillway_width_ft: float | None = None
     spillway_capacity_cfs: float | None = None
+    normal_pool_elevation_ft: float | None = Field(
+        default=None,
+        description="Normal operating pool elevation, typically spillway crest "
+        "(= crest_elevation_ft - freeboard_ft, both from the dam's EIR) -- distinct "
+        "from crest_elevation_ft (top of embankment). Used for the sunny-day initial "
+        "condition and to compare storage_curve.py's DEM-derived curve at the right "
+        "elevation instead of at crest. See docs/audit_trail.md for why this field "
+        "was added: the two elevations can give very different storage-curve "
+        "cross-check results.",
+    )
 
     breach_overrides: list[BreachOverride] = Field(default_factory=list)
     sensitivity: SensitivityRange | None = None

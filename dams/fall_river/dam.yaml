@@ -42,6 +42,18 @@ max_storage_ac_ft: 1050.0  # confirmed by owner (Jarod Roberts, CMWC) 2026-07-29
 surface_area_ac: 24.0
 drainage_area_ac: 1792.0
 
+# = crest_elevation_ft - 6.0 ft freeboard, per FallRiver_EIR-20250716.pdf's own
+# "FREEBOARD (FT): 6.0" field (2026-07-29). NOTE: at this elevation, the real
+# (non-anchored) DEM-derived storage curve from the 2021 LiDAR gives only
+# ~239.5 ac-ft -- 73% short of the reported 890 ac-ft normal storage. This is
+# a bigger gap than at crest (where storage_curve.anchor_curve_near_crest's
+# interim approach forces an exact match by construction) and is consistent
+# with the reservoir having been partially full during the Oct 2021 LiDAR
+# flight -- underscoring that Fall River needs its own bathymetric survey
+# before its storage curve should be trusted between normal pool and crest,
+# not just papered over by anchoring. See docs/audit_trail.md.
+normal_pool_elevation_ft: 10835.0
+
 spillway_width_ft: 140.0
 spillway_capacity_cfs: 6400.0
 

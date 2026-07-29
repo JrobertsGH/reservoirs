@@ -69,6 +69,43 @@ class TestStorageCurveCmd:
 
         assert (tmp_path / "terrain.storage_curve.csv").exists()
 
+    def test_compares_at_normal_pool_elevation_when_available(self, tmp_path, capsys):
+        # Fall River's real dam.yaml has normal_pool_elevation_ft: 10835.0 (crest is 10841.0)
+        terrain_path, _, _ = make_terrain_geotiff(tmp_path / "terrain.tif")
+
+        cli.storage_curve_cmd([str(terrain_path), "--dam-yaml", str(FALL_RIVER_YAML), "--out", str(tmp_path / "curve.csv")])
+
+        out = capsys.readouterr().out
+        assert "10835.0" in out
+        assert "10841.0" not in out
+
+    def test_falls_back_to_crest_elevation_when_normal_pool_unset(self, tmp_path, capsys):
+        dam_yaml = tmp_path / "no_normal_pool.yaml"
+        dam_yaml.write_text(
+            """
+name: "Test Dam"
+state_dam_id: "000000"
+county: "Test"
+owner: "Test Owner"
+location: {latitude: 39.82, longitude: -105.69}
+hazard_class: "High"
+embankment_type: "Earth embankment"
+year_completed: 2000
+height_ft: 85.0
+crest_length_ft: 840.0
+crest_elevation_ft: 10841.0
+normal_storage_ac_ft: 890.0
+surface_area_ac: 24.0
+drainage_area_ac: 1792.0
+""",
+            encoding="utf-8",
+        )
+        terrain_path, _, _ = make_terrain_geotiff(tmp_path / "terrain.tif")
+
+        cli.storage_curve_cmd([str(terrain_path), "--dam-yaml", str(dam_yaml), "--out", str(tmp_path / "curve.csv")])
+
+        assert "10841.0" in capsys.readouterr().out
+
     def test_anchor_near_crest_requires_dam_yaml(self, tmp_path):
         terrain_path, _, _ = make_terrain_geotiff(tmp_path / "terrain.tif")
 

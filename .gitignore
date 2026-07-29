@@ -16,3 +16,7 @@ dams/*/ras_project/
 
 # Scratch commit-message files used when committing via `git commit -F`
 .git-commit-msg.txt
+
+# HTTP caches created by pygeohydro/aiohttp-client-cache during live fetches
+cache/
+*.sqlite

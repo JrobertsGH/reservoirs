@@ -38,16 +38,66 @@ crest_elevation_ft: 11200.0
 normal_storage_ac_ft: 875.0
 surface_area_ac: 31.0
 
-# NOTE: state record lists drainage area as 685 sq mi (= 438,400 ac). This is
-# implausibly large relative to Fall River Reservoir's downstream drainage
-# area of only 1,792 ac (per its 2020 EIR) -- Fall River is 9 mi *downstream*
-# of Loch Lomond on the same stream and should have a LARGER contributing
-# area, not a smaller one. Likely a units error in the state dataset (e.g.
-# recorded in the wrong field, or actually sq mi elsewhere and ac here).
-# TODO(Phase 1): re-delineate drainage area from terrain/watershed data
-# (Fall River Watershed Topo.pdf on file may resolve this) before relying on
-# this figure for the storage curve or any hydrology calcs.
-drainage_area_ac: 438400.0  # UNVERIFIED - see note above
+# NOTE (updated 2026-07-29, STILL UNVERIFIED -- needs PE sign-off): state
+# record's 685 sq mi (438,400 ac) figure confirmed implausible; provisionally
+# replaced below with a preliminary re-delineated estimate. Evidence trail:
+#   - Physical constraint (unchanged): Fall River Reservoir sits 9 mi
+#     *downstream* of Loch Lomond on the same stream and its own drainage
+#     area is 1,792 ac (per its 2020 EIR) -- a downstream dam must have >=
+#     the upstream dam's contributing area, so 438,400 ac (bigger than all
+#     of Clear Creek County) is impossible on its face.
+#   - Checked both network-share candidates this file previously pointed to
+#     -- neither gives a usable area. "Fall River Watershed Topo.pdf" / "Fall
+#     River Watershed.pdf" (Engineering\GIS_FILES\PMF\Projects\AdDitch
+#     Mountain Reservoir Tour\) turn out to be orientation/locator maps
+#     (topo + aerial basemap, a single "Fall River Watershed" pin) with no
+#     delineated boundary or acreage callout -- the main map extent doesn't
+#     even include Loch Lomond. A sibling file in that folder, "Mountain Res
+#     Watershed Topo.pdf" (not previously catalogued), shows a wider view
+#     with both a "Loch Lomand Watershed" and "Fall River Watershed" pin and
+#     is useful for visual context (a small alpine cirque basin draining
+#     Ohman/Steuart/Reynolds Lakes and Lake Caroline into Loch Lomond) -- but
+#     its green boundary lines are Arapaho NF / James Peak Wilderness
+#     administrative boundaries, not a hydrologic delineation, and it has no
+#     acreage figure either. `FallRiver_ClearCreek.shp` (Engineering\
+#     GIS_FILES\PMF\Projects\Quick Maps\Quick Maps\) turns out to be a
+#     5-feature stream CENTERLINE layer (Unnamed Stream, Clear Creek x2,
+#     Fall River, AgDitch) -- not a watershed boundary despite the "quick
+#     maps" watershed-adjacent framing -- and its NHD-style attribute fields
+#     (FTYPE/FCODE/STRM_LEVEL/METERS/FEET) are all unpopulated. It does
+#     corroborate the cascade distance below (its "Fall River" line measures
+#     ~49,301 ft = 9.3 mi) but gives no drainage-area figure.
+#   - Independent public-data cross-check: the classic StreamStats REST API
+#     (streamstats.usgs.gov/streamstatsservices/watershed.geojson) returned
+#     HTTP 404 as of 2026-07-29 and appears to be down/retired -- could not
+#     query StreamStats itself. Substituted USGS NLDI (built on the same
+#     NHDPlus network StreamStats uses), which delineated the total upstream
+#     basin at this dam's exact lat/lon (snapped ~5.8 m onto the mapped
+#     flowline) at ~740 ac (1.16 sq mi). That polygon correctly contains
+#     Lake Caroline (the known upstream tributary reservoir --
+#     dams/lake_caroline/dam.yaml), supporting the delineation being
+#     basically sound. Running the identical method on Fall River
+#     Reservoir's own point reproduces ~2,102 ac against its accepted
+#     1,792 ac (+17%), so treat NLDI's absolute number as order-of-magnitude
+#     (roughly 700-900 ac), not precise. Also worth flagging: NLDI's mapped
+#     flow network does NOT show Loch Lomond's flowline as topologically
+#     upstream of Fall River Reservoir's snapped point within 20 km -- likely
+#     an artifact of the AgDitch diversion (see shapefile above; same
+#     "Agricultural Ditch & Reservoir Company" that owns both dams) or of
+#     medium-resolution network simplification in this terrain. That's a
+#     routing-network quirk, not necessarily an error in Loch Lomond's own
+#     local catchment polygon, but it means NHDPlus/NLDI should not be
+#     over-trusted here without the LiDAR-based recheck below.
+# CONCLUSION: 438,400 ac is wrong; ~740 ac is a defensible preliminary
+# replacement (same order of magnitude as, and smaller than, Fall River
+# Reservoir's 1,792 ac, as physically required) but this is NOT a surveyed
+# figure -- only one independent quantitative source (NLDI), not the two
+# corroborating sources hoped for, since neither network-share file yielded
+# a number. TODO(Phase 1): re-delineate from the 2021 LiDAR already in
+# terrain_sources below (highest-resolution data on file, vs. NHDPlus's
+# ~30 m DEM) and get PE sign-off before using this in the storage curve or
+# any hydrology calc.
+drainage_area_ac: 740.0  # UNVERIFIED - preliminary NLDI/NHDPlus estimate (was 438400.0 per state record); see note above, PE sign-off required
 
 spillway_capacity_cfs: 1200.0
 
@@ -74,7 +124,7 @@ terrain_sources:
   - path: "\\\\ORION\\Departments\\Engineering\\RESERVOIRS\\ADRC- Reservoirs\\Loch Lomond\\Topo-2021\\CCLiDAR_LochLomond_20211018-20211027T165546Z-001\\CCLiDAR_LochLomond_20211018\\AW_CCLiDAR_LochLomond_TIN_20211018.dxf"
     kind: "lidar_tin_dxf"
     description: "2021 aerial LiDAR, TIN surface"
-  - path: "\\\\ORION\\Departments\\Engineering\\RESERVOIRS\\ADRC- Reservoirs\\Loch Lomond\\Topo-2021\\CCLiDAR_LochLomond_20211018-20211027T165546Z-001\\CCLiDAR_LochLomond_20211018\\AW_CCLiDAR_LochLomond_ALL_POINTS.csv"
+  - path: "\\\\ORION\\Departments\\Engineering\\RESERVOIRS\\ADRC- Reservoirs\\Loch Lomond\\Topo-2021\\CCLiDAR_LochLomond_20211018-20211027T165546Z-001\\CCLiDAR_LochLomond_20211018\\AW_CCLiDAR_LochLomond_20211018_ALL_POINTS.csv"
     kind: "lidar_points_csv"
     description: "2021 aerial LiDAR, raw point cloud"
 

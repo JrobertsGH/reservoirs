@@ -50,17 +50,35 @@ the reservoir/dam vicinity well but not necessarily the full downstream
 routing corridor to Idaho Springs.
 
 **`Fall River Watershed Topo.pdf` / `Fall River Watershed.pdf`** —
-`Engineering\GIS_FILES\PMF\Projects\AdDitch Mountain Reservoir Tour\`. Not
-yet opened/reviewed — worth checking early in `terrain.py` development
-whether these extend topographic coverage down toward Idaho Springs, which
-would reduce or eliminate the need to fall back to public USGS 3DEP data
-for that reach.
+`Engineering\GIS_FILES\PMF\Projects\AdDitch Mountain Reservoir Tour\`.
+**Reviewed 2026-07-29**: these are orientation/locator map exports (a topo
+basemap and an aerial/satellite basemap, respectively), each carrying a
+single "Fall River Watershed" pin down near Slater/Sherwin/Chinns Lakes and
+Fall River Reservoir. No delineated watershed boundary, no acreage figure,
+and the main map extent doesn't even include Loch Lomond (only the inset
+locator does) — these do not extend topographic coverage toward Idaho
+Springs and don't help with drainage-area or terrain questions. A third,
+previously-uncatalogued file in the same folder, **`Mountain Res Watershed
+Topo.pdf`**, is more useful: a wider hillshade+contour view showing both a
+"Loch Lomand Watershed" pin (near Loch Lomond, Lake Caroline, Ohman/Steuart/
+Reynolds Lakes) and the "Fall River Watershed" pin, giving good qualitative
+context on the small alpine cirque basin upstream of Loch Lomond — but its
+green boundary lines are Arapaho National Forest / James Peak Wilderness
+administrative boundaries (labeled as such), not a hydrologic delineation,
+and it likewise carries no acreage callout.
 
 **`FallRiver_ClearCreek.shp`** (+ `.dbf`/`.prj`/`.shx`/etc.) — `Engineering\
-GIS_FILES\PMF\Projects\Quick Maps\Quick Maps\`. An existing GIS shapefile
-for the Fall River/Clear Creek area; not yet opened to see what it actually
-contains (watershed boundary? stream network? something else). Worth a
-look before building `terrain.py`/`storage_curve.py` from scratch.
+GIS_FILES\PMF\Projects\Quick Maps\Quick Maps\`. **Reviewed 2026-07-29**:
+this is a stream **centerline** layer (shapefile geometry type PolyLine),
+not a watershed boundary — only 5 features (`Unnamed Stream`, `Clear Creek`
+x2, `Fall River`, `AgDitch`), and despite having NHD-style attribute fields
+(`FTYPE`, `FCODE`, `STRM_LEVEL`, `METERS`, `FEET`) all of them are
+unpopulated/zero. It's evidently a hand-selected set of reaches for
+labeling on quick-reference maps, not a hydrologic dataset. It does give one
+useful cross-check: its `Fall River` line measures ~49,301 ft (9.3 mi),
+consistent with the `cascade_downstream.distance_mi: 9.0` already in
+`dams/loch_lomond/dam.yaml`. It gives no drainage-area information and
+isn't a substitute for `terrain.py`/`storage_curve.py` inputs.
 
 **Other files found, not yet reviewed for breach-relevant content:**
 - `1988_Preliminary Investigation Loch Lomond Reservoir Group.pdf` —
@@ -159,5 +177,40 @@ The state record lists Loch Lomond's drainage area as 685 sq mi (438,400
 ac) — implausibly larger than Fall River Reservoir's 1,792 ac, even though
 Fall River Reservoir sits *downstream* of Loch Lomond on the same stream and
 should have the larger contributing area. Flagged as `UNVERIFIED` in
-`dams/loch_lomond/dam.yaml`; re-delineate from watershed data (possibly the
-`Fall River Watershed Topo.pdf` above) before relying on it for anything.
+`dams/loch_lomond/dam.yaml`.
+
+**Update, 2026-07-29 — still `UNVERIFIED`, needs PE sign-off before use.**
+Neither network-share candidate named above resolved this: the "Fall River
+Watershed" PDFs and `FallRiver_ClearCreek.shp` turned out to be a locator
+map and a stream-centerline layer, respectively — not watershed boundaries
+(see the reviewed descriptions above). The classic USGS StreamStats REST
+API (`streamstats.usgs.gov/streamstatsservices/watershed.geojson`) returned
+HTTP 404 as of this check and appears to be down or retired, so it could not
+be queried directly either.
+
+As a substitute, USGS NLDI (built on the same underlying NHDPlus network
+StreamStats uses) delineated the total upstream drainage basin at Loch
+Lomond's recorded lat/lon (snapping ~5.8 m onto the mapped flowline) at
+**~740 ac (1.16 sq mi)**. That basin polygon correctly contains Lake
+Caroline, the known upstream tributary reservoir, which supports the
+delineation being basically sound. Running the identical NLDI method on
+Fall River Reservoir's own point reproduces ~2,102 ac against its accepted
+1,792 ac (+17%), so treat the ~740 ac figure as order-of-magnitude (roughly
+700–900 ac), not precise. Also worth noting for anyone building
+`terrain.py`'s routing: NLDI's flow network does *not* show Loch Lomond's
+flowline as topologically upstream of Fall River Reservoir's snapped point
+within 20 km — most likely an artifact of the Agricultural Ditch diversion
+(the "AgDitch" feature in `FallRiver_ClearCreek.shp`; same "Agricultural
+Ditch & Reservoir Company" that owns both dams) or of medium-resolution
+NHDPlus network simplification in this terrain, rather than an error in
+Loch Lomond's own local catchment polygon — but it's a reason not to
+over-trust NHDPlus/NLDI here without a proper recheck.
+
+`dams/loch_lomond/dam.yaml`'s `drainage_area_ac` has been provisionally
+updated from 438,400 to 740.0 with this full evidence trail in its comment,
+still marked `UNVERIFIED`. Only one independent quantitative source (NLDI)
+was obtained, not the two corroborating sources originally hoped for — the
+network-share files gave qualitative context at best. Re-delineating from
+the 2021 LiDAR already in `terrain_sources` (far higher resolution than
+NHDPlus's ~30 m DEM) and getting PE sign-off is the recommended next step
+before this figure is used in the storage curve or any hydrology calc.

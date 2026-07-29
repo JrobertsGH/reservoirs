@@ -11,6 +11,7 @@ from pathlib import Path
 import geopandas as gpd
 import numpy as np
 import pandas as pd
+import pytest
 import rasterio
 from rasterio.transform import from_origin
 from shapely.geometry import Point, box
@@ -67,6 +68,28 @@ class TestStorageCurveCmd:
         cli.storage_curve_cmd([str(terrain_path)])
 
         assert (tmp_path / "terrain.storage_curve.csv").exists()
+
+    def test_anchor_near_crest_requires_dam_yaml(self, tmp_path):
+        terrain_path, _, _ = make_terrain_geotiff(tmp_path / "terrain.tif")
+
+        with pytest.raises(SystemExit):
+            cli.storage_curve_cmd([str(terrain_path), "--anchor-near-crest"])
+
+    def test_anchor_near_crest_extends_curve_and_reports_it(self, tmp_path, capsys):
+        terrain_path, _, _ = make_terrain_geotiff(tmp_path / "terrain.tif")
+        out_csv = tmp_path / "curve.csv"
+
+        cli.storage_curve_cmd(
+            [str(terrain_path), "--dam-yaml", str(FALL_RIVER_YAML), "--anchor-near-crest", "--out", str(out_csv)]
+        )
+
+        df = pd.read_csv(out_csv)
+        assert "anchored" in df.columns
+        assert df["anchored"].any()
+        assert df.iloc[-1]["elevation_ft"] == pytest.approx(10841.0)  # Fall River's crest elevation
+        out = capsys.readouterr().out
+        assert "Anchored" in out
+        assert "PRELIMINARY" in out
 
 
 class TestMappingCmd:

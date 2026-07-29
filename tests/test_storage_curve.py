@@ -5,6 +5,7 @@ import rasterio
 from rasterio.transform import from_origin
 
 from reservoirs.storage_curve import (
+    anchor_curve_near_crest,
     compare_to_reported_storage,
     compute_elevation_area_storage_curve,
     elevation_at_storage,
@@ -123,6 +124,57 @@ class TestLookups:
             {"elevation_ft": [100, 110, 120], "area_ac": [1, 1, 1], "storage_ac_ft": [0, 10, 20]}
         )
         assert elevation_at_storage(curve, 15) == pytest.approx(115.0)
+
+
+class TestAnchorCurveNearCrest:
+    def make_partial_curve(self):
+        # trustworthy up to 120 (storage=20), then breaks out to the boundary
+        return pd.DataFrame(
+            {
+                "elevation_ft": [100, 110, 120, 130],
+                "area_ac": [1, 2, 2, np.nan],
+                "storage_ac_ft": [0, 10, 20, 45],
+                "touches_boundary": [False, False, False, True],
+            }
+        )
+
+    def test_keeps_trustworthy_portion_unchanged(self):
+        curve = self.make_partial_curve()
+        anchored = anchor_curve_near_crest(curve, crest_elevation_ft=150.0, known_storage_ac_ft=100.0)
+
+        trustworthy = anchored[anchored["elevation_ft"] <= 120]
+        assert list(trustworthy["storage_ac_ft"]) == [0, 10, 20]
+        assert not trustworthy["anchored"].any()
+
+    def test_extends_to_crest_with_known_storage(self):
+        curve = self.make_partial_curve()
+        anchored = anchor_curve_near_crest(curve, crest_elevation_ft=150.0, known_storage_ac_ft=100.0)
+
+        last_row = anchored.iloc[-1]
+        assert last_row["elevation_ft"] == pytest.approx(150.0)
+        assert last_row["storage_ac_ft"] == pytest.approx(100.0)
+        assert last_row["anchored"] == True  # noqa: E712
+
+    def test_extension_interpolates_linearly(self):
+        curve = self.make_partial_curve()
+        anchored = anchor_curve_near_crest(curve, crest_elevation_ft=140.0, known_storage_ac_ft=40.0, elevation_step_ft=10.0)
+
+        # last trusted point: (120, 20); crest anchor: (140, 40) -> midpoint (130, 30)
+        midpoint = anchored[anchored["elevation_ft"] == 130.0].iloc[0]
+        assert midpoint["storage_ac_ft"] == pytest.approx(30.0)
+        assert midpoint["anchored"] == True  # noqa: E712
+
+    def test_raises_when_crest_at_or_below_last_trusted_point(self):
+        curve = self.make_partial_curve()
+        with pytest.raises(ValueError, match="nothing to anchor"):
+            anchor_curve_near_crest(curve, crest_elevation_ft=120.0, known_storage_ac_ft=50.0)
+
+    def test_raises_when_no_trustworthy_point_exists(self):
+        curve = pd.DataFrame(
+            {"elevation_ft": [100, 110], "area_ac": [1, 1], "storage_ac_ft": [0, 10], "touches_boundary": [True, True]}
+        )
+        with pytest.raises(ValueError, match="No trustworthy"):
+            anchor_curve_near_crest(curve, crest_elevation_ft=150.0, known_storage_ac_ft=100.0)
 
 
 class TestCompareToReportedStorage:

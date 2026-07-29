@@ -87,7 +87,7 @@ def terrain_cmd(argv: list[str] | None = None) -> None:
 
 
 def storage_curve_cmd(argv: list[str] | None = None) -> None:
-    from reservoirs.storage_curve import compare_to_reported_storage, compute_elevation_area_storage_curve
+    from reservoirs.storage_curve import anchor_curve_near_crest, compare_to_reported_storage, compute_elevation_area_storage_curve
 
     parser = argparse.ArgumentParser(description="Derive an elevation-area-storage curve from a terrain GeoTIFF.")
     parser.add_argument("terrain_path", type=Path)
@@ -97,20 +97,49 @@ def storage_curve_cmd(argv: list[str] | None = None) -> None:
     parser.add_argument("--elevation-step-ft", type=float, default=1.0)
     parser.add_argument("--max-elevation-ft", type=float, default=None)
     parser.add_argument("--out", type=Path, default=None, help="CSV output path; defaults next to the terrain file.")
+    parser.add_argument(
+        "--anchor-near-crest",
+        action="store_true",
+        help="When the DEM can't resolve the reservoir's true rim (touches_boundary before crest), "
+        "extend the curve to crest by linearly interpolating to a known reported storage figure. "
+        "Requires --dam-yaml. Every added/replaced row is marked anchored=True -- an explicit, "
+        "flagged approximation, not a substitute for real survey data. Needs PE sign-off.",
+    )
+    parser.add_argument(
+        "--anchor-storage-ac-ft",
+        type=float,
+        default=None,
+        help="--anchor-near-crest only: the known storage figure to anchor to; "
+        "defaults to the dam's reported normal_storage_ac_ft.",
+    )
     args = parser.parse_args(argv)
+
+    if args.anchor_near_crest and args.dam_yaml is None:
+        parser.error("--anchor-near-crest requires --dam-yaml")
 
     seed_xy = (args.seed_x, args.seed_y) if args.seed_x is not None and args.seed_y is not None else None
     curve = compute_elevation_area_storage_curve(
         args.terrain_path, seed_xy=seed_xy, elevation_step_ft=args.elevation_step_ft, max_elevation_ft=args.max_elevation_ft
     )
 
+    dam = load_dam_config(args.dam_yaml) if args.dam_yaml is not None else None
+
+    if args.anchor_near_crest:
+        anchor_storage = args.anchor_storage_ac_ft if args.anchor_storage_ac_ft is not None else dam.normal_storage_ac_ft
+        curve = anchor_curve_near_crest(curve, dam.crest_elevation_ft, anchor_storage, elevation_step_ft=args.elevation_step_ft)
+        n_anchored = int(curve["anchored"].sum())
+        print(
+            f"Anchored {n_anchored} row(s) above the last DEM-trustworthy elevation to reach "
+            f"{anchor_storage:.1f} ac-ft at crest ({dam.crest_elevation_ft} ft) -- PRELIMINARY, "
+            "needs PE sign-off (see docs/preliminary_disclaimer.md)."
+        )
+
     out_path = args.out if args.out is not None else Path(args.terrain_path).with_suffix(".storage_curve.csv")
     out_path.parent.mkdir(parents=True, exist_ok=True)
     curve.to_csv(out_path, index=False)
     print(f"Wrote storage curve ({len(curve)} rows): {out_path}")
 
-    if args.dam_yaml is not None:
-        dam = load_dam_config(args.dam_yaml)
+    if dam is not None and not args.anchor_near_crest:
         for warning in compare_to_reported_storage(curve, dam.crest_elevation_ft, dam.normal_storage_ac_ft):
             print(f"WARNING: {warning}")
 

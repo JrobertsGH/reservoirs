@@ -38,7 +38,7 @@ crest_width_ft: 20.0
 crest_elevation_ft: 10841.0
 
 normal_storage_ac_ft: 890.0
-max_storage_ac_ft: 1050.0  # per prior research; confirm against EIR/owner records in Phase 1
+max_storage_ac_ft: 1050.0  # confirmed by owner (Jarod Roberts, CMWC) 2026-07-29
 surface_area_ac: 24.0
 drainage_area_ac: 1792.0
 

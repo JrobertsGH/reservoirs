@@ -105,6 +105,65 @@ def elevation_at_storage(curve: pd.DataFrame, storage_ac_ft: float) -> float:
     return float(np.interp(storage_ac_ft, curve["storage_ac_ft"], curve["elevation_ft"]))
 
 
+def anchor_curve_near_crest(
+    curve: pd.DataFrame,
+    crest_elevation_ft: float,
+    known_storage_ac_ft: float,
+    elevation_step_ft: float = 1.0,
+) -> pd.DataFrame:
+    """Extend/correct a DEM-derived curve above the highest elevation the
+    terrain can actually resolve, by linearly interpolating storage between
+    the last trustworthy (non-`touches_boundary`) DEM point and a known
+    reported total storage at crest.
+
+    This is an explicit, flagged approximation for when terrain alone can't
+    resolve a reservoir's true rim (e.g. aerial LiDAR that can't see
+    through standing water -- see docs/audit_trail.md's storage-curve-gap
+    entry) -- not a substitute for a bathymetric survey. Every row above
+    the last trustworthy point is marked `anchored=True` (added as a new
+    column on the whole returned curve) so it can never be silently
+    mistaken for DEM-derived data. `known_storage_ac_ft`'s source (e.g. a
+    dam's reported `normal_storage_ac_ft`) isn't validated here -- a PE
+    must confirm it before this curve is used in HEC-RAS.
+    """
+    trustworthy = curve[~curve["touches_boundary"]]
+    if trustworthy.empty:
+        raise ValueError(
+            "No trustworthy (non-boundary-touching) elevation exists in this curve -- "
+            "there's no real anchor point to extend from; the terrain doesn't resolve "
+            "any part of the reservoir's true rim."
+        )
+
+    last_trusted = trustworthy.iloc[-1]
+    e0, s0 = float(last_trusted["elevation_ft"]), float(last_trusted["storage_ac_ft"])
+
+    if crest_elevation_ft <= e0:
+        raise ValueError(
+            f"crest_elevation_ft ({crest_elevation_ft}) is at or below the last "
+            f"trustworthy DEM elevation ({e0}) -- nothing to anchor/extend."
+        )
+
+    kept = curve[curve["elevation_ft"] <= e0].copy()
+    kept["anchored"] = False
+
+    extension_elevations = np.arange(e0 + elevation_step_ft, crest_elevation_ft, elevation_step_ft)
+    extension_elevations = np.append(extension_elevations, crest_elevation_ft)
+
+    extension_storage = np.interp(extension_elevations, [e0, crest_elevation_ft], [s0, known_storage_ac_ft])
+
+    extension = pd.DataFrame(
+        {
+            "elevation_ft": extension_elevations,
+            "area_ac": np.nan,
+            "storage_ac_ft": extension_storage,
+            "touches_boundary": True,
+            "anchored": True,
+        }
+    )
+
+    return pd.concat([kept, extension], ignore_index=True)
+
+
 def compare_to_reported_storage(
     curve: pd.DataFrame, elevation_ft: float, reported_storage_ac_ft: float, tolerance_pct: float = 20.0
 ) -> list[str]:

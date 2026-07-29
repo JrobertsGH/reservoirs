@@ -283,21 +283,82 @@ bundled *template* and is correct as-is.
 `apply_breach_parameters` and `configure_initial_and_boundary_conditions`
 both *modify* an existing plan/unsteady file; neither `ras_project.py` nor
 the installed `ras-commander` (no bundled template, no `clone`-from-nothing
-option — confirmed by checking directly, not assumed) can create one from
-scratch. This is the one remaining gap before `generate_mesh`/`run_plan`
-can be reached for real. Two ways forward: write a new, carefully-verified
-minimal Plan/Unsteady file writer (matching the rigor
-`create_reservoir_storage_area` used), or create a blank plan + unsteady
-file once by hand in the HEC-RAS GUI — a much smaller one-time step than
-the embankment structure used to be, since everything else (geometry,
-breach, IC/BC) is still scripted from there. Not yet decided — see
-`audit_trail.md`.
+option, and `set_normal_depth_boundary`'s own docstring explicitly says
+authoring a brand-new boundary block is "tracked separately as a
+follow-up" — confirmed by reading the library's source, not assumed) can
+create one from scratch. **Decision made 2026-07-29**: create the blank
+Plan + Unsteady Flow Data once in the HEC-RAS GUI (§2.5b below) rather
+than write new, unverified file-format code for something the library's
+own authors haven't built yet either — everything else (geometry, breach
+parameters, boundary condition *values*, mesh, running the plan) still
+goes back to being scriptable from there.
 
 **Reminder**: always pass `ras_project.ras_connection_name(dam)` — not
 `breach_structure_name(dam)` — anywhere the actual HEC-RAS geometry file
 needs the connection's name (creating it, and later in
 `apply_breach_parameters`'s `structure_name`). `breach_structure_name` is
 for human-readable labels only (reports, titles).
+
+### 2.5b Finishing the model in the HEC-RAS GUI
+
+Picking up where §2.5 leaves off — the geometry (2D flow area, reservoir
+Storage Area, breach Connection) is already built and saved in the real
+`.g01` file. This is the GUI portion needed once per project before
+control returns to Python. Names below match what the real Fall River
+Reservoir project actually has.
+
+1. **Open the project.** File → Open Project → `Fall_River_Reservoir.prj`
+   in `dams/fall_river/ras_project/`.
+2. **Create Unsteady Flow Data.** Edit → Unsteady Flow Data (or Ctrl+U).
+   - **Initial Conditions tab**: find the "Fall River Pool" storage area
+     and enter its starting (sunny-day, normal-pool) elevation — use
+     `normal_pool_elevation_ft` from `dam.yaml` (**10,835.0 ft**, sourced
+     from the EIR's freeboard figure — see `audit_trail.md`).
+   - **Boundary Conditions tab** needs a place for flow to leave the
+     "Downstream 2D" flow area. If no BC line exists yet on its
+     downstream perimeter, add one first in the Geometric Data editor
+     (2D Flow Area editor → "SA/2D Area BC Lines" tool → draw a line
+     across the downstream edge of the mesh perimeter, name it something
+     short like `"DS Exit"` — remember the ≤16-character limit). Back in
+     Unsteady Flow Data, select that BC line and set **Normal Depth**,
+     friction slope starting point **≈0.16** (`terrain.
+     estimate_downstream_channel_slope`'s real-terrain estimate for this
+     site) — this is unusually steep for a normal-depth boundary, so
+     cross-check it against a topo map or the channel's visible grade in
+     RAS Mapper before trusting it; it's a first-pass terrain-only number,
+     not a final value.
+   - Save as `u01`, give it a title (e.g. "Sunny-Day Breach").
+3. **Create a new Plan.** File → New Plan. Select Geometry `g01` and
+   Unsteady Flow `u01`. Set:
+   - **Simulation window**: short — a sunny-day breach only needs enough
+     time to capture the peak and initial recession, e.g. 6–12 hours.
+   - **Computation Interval**: start small (1–5 sec) given the steep
+     downstream slope above; HEC-RAS's own compute-window stability
+     warnings will tell you if it needs to be smaller.
+   - Save as `p01`.
+4. **Set the breach parameters.** Either in the GUI (double-click the "Dam
+   070129" connection in the Geometric Data editor → Breach tab → enter
+   the Froehlich (2008) values already computed: width 91.2 ft, side
+   slope 0.7 H:V, formation time 0.246 hr), **or** — once the plan exists
+   — hand this back to Python to avoid transcription errors:
+   ```python
+   rp.apply_breach_parameters(
+       "01", rp.ras_connection_name(dam), estimates["froehlich_2008"],
+       breach_bottom_elev_ft=dam.crest_elevation_ft - dam.height_ft,
+       weir_top_elev_ft=dam.crest_elevation_ft,
+   )
+   ```
+5. **Generate the mesh.** In the Geometric Data editor, right-click the
+   "Downstream 2D" flow area → Generate Computation Points (or just check
+   "Force Geometry Preprocessor" in the Plan's compute options and let it
+   mesh at compute time).
+6. **Compute.** Run → Compute Current Plan (F10). Watch the compute
+   window — HEC-RAS reports instability, dry-cell, and convergence
+   warnings there directly; don't trust a "finished" run that has them.
+7. **Get results back to this toolkit.** Once computed, hand off to the
+   pipeline's own postprocessing (§2.6–2.8 below) for a polished,
+   preliminary-labeled EAP-style map, rather than exporting straight from
+   RAS Mapper.
 
 ### 2.6 Postprocess
 

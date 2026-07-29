@@ -12,6 +12,54 @@ architectural decisions), [`data_sources.md`](data_sources.md) (where every
 (what every entry here is subject to: nothing below is a certified
 engineering conclusion).
 
+## 2026-07-29 — Plan/Unsteady-file gap: confirmed genuinely absent, decided on GUI
+
+Followed up on the previous entry's open question (write a new Plan/
+Unsteady-file writer, vs. create one by hand in the GUI) by checking
+harder for a hidden capability first, the same way the breach-structure
+"manual step" turned out to be a wrong-class assumption earlier this
+session. This time the answer held up under scrutiny:
+
+- Downloaded `ras-commander`'s official HEC-RAS example project set
+  (`RasExamples.get_example_projects`/`extract_project`) and inspected a
+  real "2D Unsteady Flow Hydraulics" project (`Muncie`, plan `p04` +
+  geometry `g04`) directly — confirms what a real, valid 2D unsteady Plan
+  file looks like (a ~300-line keyword file, mostly program defaults) and
+  a real Unsteady Flow file's `Boundary Location=` block format. Muncie's
+  own boundaries are all 1D river/reach/station-keyed, though, not
+  SA/2D-keyed like our project — not directly reusable as a template for
+  our case, but confirms the general file shape.
+- Read `RasUnsteady.set_normal_depth_boundary`'s source directly: its own
+  docstring states plainly that it "ONLY edits a boundary that already
+  exists... Authoring brand-new boundary blocks from geometry definitions
+  is tracked separately as a follow-up" — i.e. even `ras-commander`'s own
+  authors haven't built this yet. `set_initial_storage_elevation` *does*
+  append a new entry if one is absent (checked its source too), but a
+  Normal Depth boundary on a 2D BC line needs the BC line itself to exist
+  in the geometry first, which has the same "not yet buildable" status.
+
+**Decision**: create the blank Plan + Unsteady Flow Data once in the
+HEC-RAS GUI (§2.5b in `user_guide.md`) rather than write new, unverified
+file-writing code for a gap the library's own maintainers have explicitly
+flagged as unbuilt. Writing an untested Plan/Unsteady/BC-line writer for a
+real regulatory dam-breach model carries more risk (a subtly wrong file
+that HEC-RAS silently mis-runs) than a five-minute, well-understood GUI
+step — unlike the embankment-structure case, where a real, tested write
+API turned out to already exist and just needed finding.
+
+## 2026-07-29 — Model-setup progress report (not a computed inundation map)
+
+Produced `dams/fall_river/outputs/fall_river_model_setup_progress_
+2026-07-29.html` — a shareable status snapshot for stakeholders, built
+entirely from real data already in hand (2021 LiDAR terrain hillshade,
+the real reservoir footprint at normal pool, the real extracted crest
+alignment, the real Froehlich 2008 breach estimate) with **no computed
+flood extent**, since no HEC-RAS simulation has run yet. Labeled
+explicitly as "NOT A COMPUTED INUNDATION EXTENT" in the figure itself and
+the report text, not just in a disclaimer someone could skip past — this
+distinction matters because it's exactly the kind of thing that could be
+mistaken for a real result if forwarded without context.
+
 ## 2026-07-29 — Environment: broken MKL/BLAS install
 
 **Finding.** The `reservoirs` conda environment had `numpy` linked against

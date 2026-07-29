@@ -104,12 +104,24 @@ a Plan or Unsteady Flow file from scratch (only modify an existing one).
 See `docs/audit_trail.md` and `docs/user_guide.md` §2.5 for the full,
 verified sequence and both gaps.
 
-What's left before a real run: resolve the Plan/Unsteady-file gap (write a
-new file-writer, or create a blank one once by hand in the GUI), pick a
-mesh cell size, refine the 2D Flow Area's perimeter (currently the full
-terrain bounding rectangle, not yet clipped to downstream of the dam), then
-run the plan and the rest of the chain (postprocess → structures/PAR →
-map) for real.
+**Plan/Unsteady-file gap: resolved by decision, not by code.** Confirmed
+genuinely absent (even `ras-commander`'s own `set_normal_depth_boundary`
+docstring says authoring one from scratch is an unbuilt follow-up) —
+create the blank Plan + Unsteady Flow Data once in the HEC-RAS GUI (see
+`docs/user_guide.md` §2.5b for the exact steps against this real project),
+then hand back to Python for boundary condition values, breach parameters,
+mesh generation, and running.
+
+A shareable **model setup progress report** (real terrain, real reservoir
+footprint, real crest alignment, real breach-parameter estimate — no
+computed flood extent, since none has been run yet) is at
+`dams/fall_river/outputs/fall_river_model_setup_progress_2026-07-29.html`.
+
+What's left before a real run: finish the GUI step above, pick a mesh cell
+size, refine the 2D Flow Area's perimeter (currently the full terrain
+bounding rectangle, not yet clipped to downstream of the dam), then run
+the plan and the rest of the chain (postprocess → structures/PAR → map)
+for real.
 
 ## Adding a new dam
 

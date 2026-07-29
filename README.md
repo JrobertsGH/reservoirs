@@ -68,23 +68,35 @@ build, not a one-shot transform) but no longer needs any manual GUI step
 either — see `methodology.md`'s "No manual step" section.
 
 Real terrain and a real breach-parameter report have now been produced for
-both dams from their actual 2021 LiDAR surveys. **Known blocker**: the
-elevation-area-storage curve (`storage_curve.py`) can't fully close either
-reservoir's basin from that LiDAR alone — aerial LiDAR can't see through
-standing water, so anything submerged during the Oct 2021 flight is simply
-absent from the DEM, and the dry margin it did capture doesn't fully
-enclose either reservoir's true rim within the survey extent. Confirmed by
-placing the flood-fill seed to test multiple hypotheses, not just the
-default. This needs a bathymetric/sonar survey or a historic
-storage-capacity study to resolve — not something further code changes can
-fix on their own.
+both dams from their actual 2021 LiDAR surveys. The storage-curve gap
+(aerial LiDAR can't see through standing water, so it alone can't close
+either reservoir's basin) is resolved for both dams, by two different
+routes:
 
-What's left before a first real HEC-RAS run: resolve the storage-curve gap
-above (at least well enough to build a defensible reservoir Storage Area
-rating curve), then run the full chain (terrain → breach params → storage
+- **Loch Lomond**: a real 2022 bathymetric survey was found and merged in
+  (`terrain.build_terrain_from_lidar_and_bathymetry`) — the basin now
+  closes almost exactly to crest, and its curve matches the reported
+  normal storage to within 1% near normal pool.
+- **Fall River Reservoir**: no bathymetric survey exists yet, so
+  `storage_curve.anchor_curve_near_crest` (via `reservoirs-storage-curve
+  --anchor-near-crest`) bridges the small remaining gap (the real DEM
+  closes to within a few feet of crest on its own) by anchoring to the
+  dam's reported total storage. Flagged `anchored=True` per row and still
+  needs PE sign-off — an explicit, documented interim approach, not a
+  substitute for survey data.
+
+A candidate dam-crest alignment (needed for `ras_project.
+create_breach_structure`) has also been extracted from Fall River's real
+terrain and visually confirmed (`terrain.extract_crest_alignment`) — see
+`docs/audit_trail.md` for both.
+
+What's left before a first real HEC-RAS run: a `normal_pool_elevation_ft`
+schema field (Loch Lomond's real numbers now show why it matters — the
+curve matches almost exactly at normal pool but not at crest), then
+building and running the full chain (terrain → breach params → storage
 curve → 2D flow area/mesh → reservoir Storage Area → breach structure →
-run plan → postprocess → structures/PAR → map) for real for Loch Lomond and
-Fall River Reservoir.
+run plan → postprocess → structures/PAR → map) for real, starting with
+Fall River Reservoir or Loch Lomond — both now have workable inputs.
 
 ## Adding a new dam
 

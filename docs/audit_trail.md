@@ -195,6 +195,97 @@ the recommended path to a defensible final figure. See commit `ed8f80a`
 and `data_sources.md`'s "Known data-quality issue" section for the full
 writeup.
 
+## 2026-07-29 — Loch Lomond's storage-curve gap resolved via real bathymetry
+
+Following up on the storage-curve gap documented above, the user directed
+attention to `LOCH_LOMOND_TOPO_10042022.csv` in Downloads specifically as a
+real Loch Lomond bathymetric survey. That file had previously been grouped
+with a confirmed-unrelated Grand County batch (see the entry below) based
+on its raw coordinates matching that batch's *stated* range — but
+cross-checking it directly (not through that batch's metadata) tells a
+different story: 718 of its 1,321 points are marked `description="BTM"`
+(bottom soundings), with an elevation range (11,124–11,203 ft) matching
+this project's real Loch Lomond crest elevation (11,200 ft) almost
+exactly. Its `x`/`y` columns are swapped relative to (Easting, Northing)
+convention; once swapped, its points fall entirely inside Loch Lomond's
+real 2021 LiDAR survey extent, and its centroid lands within ~0.15 mi of
+the dam's recorded lat/lon. **Genuine data, mislabeled by association** —
+see `data_sources.md`'s corrected entry for the full cross-check.
+
+**Fix.** Added `load_bathymetry_points_csv` (handles the column swap,
+filters to bottom soundings) and `build_terrain_from_lidar_and_bathymetry`
+(merges bathymetric points with the existing LiDAR point cloud before
+gridding) to `terrain.py`, plus a new `bathymetry_points_csv`
+`terrain_sources` kind. Referenced the file in `dams/loch_lomond/dam.yaml`
+at its current Downloads path (not yet moved onto `\\ORION` — flagged for
+durability).
+
+**Result — the gap is essentially closed for Loch Lomond.** Rebuilding
+terrain with the merged data and reseeding the flood-fill at the deepest
+bathymetric point (rather than the default global-minimum seed, which
+still lands in the downstream channel and gives a nonsensical 6,508 ac-ft):
+the basin now stays closed (`touches_boundary=False`) all the way *past*
+crest elevation, only breaking out at 11,203.7 ft — 3.7 ft above crest
+(11,200 ft). Storage at crest comes to 1,129.5 ac-ft vs. the reported 875
+(29% over) — but at 11,191.7 ft, storage is 880.3 ac-ft, a 0.6% match to
+the reported figure. This strongly suggests normal pool sits a few feet
+below crest (as freeboard design would predict) and that the "29% at
+crest" figure is an artifact of comparing at the wrong elevation (crest
+instead of normal pool) — reinforcing the `normal_pool_elevation_ft`
+schema gap noted above, now with real numbers showing where it actually
+matters.
+
+## 2026-07-29 — `anchor_curve_near_crest`: an explicit interim fallback where bathymetry isn't available
+
+Fall River Reservoir has no equivalent bathymetric survey. Added
+`storage_curve.anchor_curve_near_crest` — given a curve, a crest elevation,
+and a known reported storage figure, it keeps the DEM-derived curve up to
+its last trustworthy (non-boundary-touching) point, then linearly
+interpolates storage from there to the crest anchor. Every added/replaced
+row is marked `anchored=True`, so it can never be silently mistaken for
+survey data. Wired into the CLI as `reservoirs-storage-curve
+--anchor-near-crest` (requires `--dam-yaml`; `--anchor-storage-ac-ft` to
+override the default of `normal_storage_ac_ft`).
+
+Run for real against Fall River's terrain (informed seed inside the
+reservoir pool, since the default seed fails identically to Loch Lomond's):
+only **3 rows** needed anchoring/extrapolation — the real DEM-derived
+closed basin already reaches to within 3 ft of crest on its own (matching
+the ~10,824–10,838 ft closed range found in the original real-terrain run),
+so this interim approach only bridges a small, well-characterized gap
+here, not a large assumption. Output: `dams/fall_river_reservoir/data/
+storage_curve_anchored.csv`. Still explicitly preliminary — needs PE
+sign-off per the CLI's own printed reminder.
+
+## 2026-07-29 — Fall River's dam-crest alignment: extracted from terrain, visually confirmed
+
+`ras_project.create_breach_structure` needs the dam-crest alignment as a
+polyline — the one remaining real one-time GIS input, not derivable from
+`storage_curve.py`'s flood-fill the way the reservoir footprint is. Added
+`terrain.extract_crest_alignment`: finds the connected component of
+terrain cells at or above the dam's crest elevation nearest its `dam.yaml`
+location (an intact embankment's own top surface sits at/above design
+crest, distinguishing it from the surrounding valley), then fits a line
+through it via PCA and returns its two endpoints.
+
+Run against Fall River Reservoir's real terrain and checked visually
+(plotted over a hillshade of the local terrain window): the result is a
+clear, ~30–40 ft-wide linear ridge exactly where the dam.yaml location
+sits, distinct from incidental far-away contour crossings elsewhere in the
+scene. Extracted length: 918.2 ft vs. `dam.yaml`'s `crest_length_ft: 840.0`
+— 9% over, plausibly because the elevation threshold picks up a bit of
+abutment/spillway tie-in beyond the literal design crest length. Treat the
+endpoints as a good candidate, not ground truth — review against as-built
+drawings before using in a real HEC-RAS project; this is a heuristic over
+survey terrain, the same category of judgment call as picking a storage-
+curve seed point.
+
+## 2026-07-29 — Fall River's `max_storage_ac_ft` confirmed
+
+The `# confirm against EIR/owner records` flag on `max_storage_ac_ft:
+1050.0` in `dams/fall_river/dam.yaml` is resolved: confirmed directly by
+the owner (Jarod Roberts, CMWC) as correct. Comment updated accordingly.
+
 ## 2026-07-29 — Grand County file mix-up: confirmed unrelated, one open question
 
 **Finding.** The Downloads-folder files previously flagged as describing a

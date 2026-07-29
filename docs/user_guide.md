@@ -115,16 +115,46 @@ warning looks wildly wrong (e.g. thousands of percent off), pass
 `--seed-x`/`--seed-y` for a point you know is inside the actual reservoir
 pool.
 
-#### Known gap: the storage curve can't fully close either basin
+#### Known gap: 2021 LiDAR alone can't close either basin (now resolved, two ways)
 
-Confirmed for both Loch Lomond and Fall River Reservoir (see
-[`audit_trail.md`](audit_trail.md)): the 2021 LiDAR survey can't see
-through standing water, so the flood-fill's low point never fully
-encloses within the surveyed extent. This is a **data gap, not a bug** —
-don't spend time re-tuning the seed or the code; it needs a bathymetric/
-sonar survey or a historic storage-capacity study as an additional
-terrain source. See §5 below for how to work around this for a
-preliminary example deliverable in the meantime.
+The 2021 LiDAR survey can't see through standing water, so the flood-fill's
+low point doesn't fully enclose either reservoir from LiDAR alone (see
+[`audit_trail.md`](audit_trail.md)). Two resolutions exist, both
+preliminary/PE-review-required:
+
+- **Loch Lomond has a real bathymetric survey.** Build terrain with it
+  merged in:
+  ```
+  reservoirs-terrain dams/loch_lomond/dam.yaml   # still LiDAR-only; see below for the merged build
+  ```
+  There's no CLI wrapper for the merged build yet — call it directly:
+  ```python
+  from reservoirs.config import load_dam_config
+  from reservoirs.terrain import build_terrain_from_lidar_and_bathymetry
+  dam = load_dam_config("dams/loch_lomond/dam.yaml")
+  build_terrain_from_lidar_and_bathymetry(dam)  # -> dams/loch_lomond/data/terrain_lidar_bathy.tif
+  ```
+  Then run `reservoirs-storage-curve` against that file with a seed placed
+  inside the reservoir (not the default global-minimum seed — see below).
+  The basin now closes past crest elevation.
+
+- **No bathymetric survey exists for Fall River Reservoir (or any other
+  dam without one).** Use `--anchor-near-crest`:
+  ```
+  reservoirs-storage-curve dams/fall_river_reservoir/data/terrain_lidar.tif --dam-yaml dams/fall_river/dam.yaml --seed-x <x> --seed-y <y> --anchor-near-crest
+  ```
+  This keeps the DEM-derived curve up to the last elevation it can
+  actually resolve, then linearly interpolates to the dam's reported
+  storage at crest. Every added row is marked `anchored=True` in the
+  output CSV — check that column before trusting any row near the top of
+  the curve. Add `--anchor-storage-ac-ft` to anchor to a different figure
+  than `normal_storage_ac_ft` (e.g. `max_storage_ac_ft`).
+
+**Either way, use an informed seed, not the default.** The default seed
+(global minimum elevation) lands in the downstream channel for both dams
+and gives a nonsensical cross-check (thousands of percent off) — pass
+`--seed-x`/`--seed-y` for a point you know is inside the actual reservoir
+pool (e.g. a bathymetric survey's deepest point, if one exists).
 
 ### 2.4 Manning's n (optional, informational only right now)
 
@@ -247,39 +277,38 @@ specific dam's numbers. 98 tests as of this writing, all passing.
 
 ## 5. Producing a first preliminary example deliverable
 
-Fall River Reservoir is the better starting candidate — see
-[`audit_trail.md`](audit_trail.md#2026-07-29--real-terrain--breach-parameter-run-for-both-dams):
-its terrain shows a genuinely closed basin over part of its elevation
-range, where Loch Lomond's currently shows none at any elevation. Getting
-from here to a real first example still requires, in order:
+As of 2026-07-29, both dams have workable inputs — see
+[`audit_trail.md`](audit_trail.md) for the full evidence trail behind each
+item below:
 
-1. **A decision on the storage-curve gap** (§2.3) — either commission
-   bathymetric survey data, or have a PE approve a documented interim
-   approach (e.g. blending the DEM-derived curve over the range it does
-   cover with the dam's reported total storage as a single anchor point
-   near crest). This is a judgment call for a PE to make and sign off on,
-   not something to pick silently in code.
-2. **Digitizing the dam-crest alignment** — `create_breach_structure`
-   needs the crest centerline as a polyline in the project CRS. One-time
-   GIS input, same category as the reservoir-footprint step
-   `storage_curve.py`'s flood-fill approach made unnecessary elsewhere —
-   this one hasn't been eliminated (the embankment's actual location isn't
-   derivable from terrain alone).
-3. **A `normal_pool_elevation_ft` field** — `config.py`'s `DamConfig`
-   doesn't have one yet (noted in `audit_trail.md`); needed for the sunny-
-   day initial condition (`configure_initial_and_boundary_conditions`) and
-   to make the storage-curve cross-check compare at the right elevation
-   instead of at crest.
-4. **Confirming Fall River's storage figure** — `max_storage_ac_ft: 1050`
-   in its `dam.yaml` is flagged `# confirm against EIR/owner records`,
-   unverified. Resolve before it feeds a real breach-parameter estimate.
-5. **Mesh cell size and boundary-condition values** (downstream friction
+**Resolved:**
+- ✅ Storage-curve gap — Loch Lomond via a real bathymetric survey
+  (§2.3), Fall River via `--anchor-near-crest` (only 3 rows needed
+  anchoring; its real DEM closure already reaches to within a few feet of
+  crest).
+- ✅ Dam-crest alignment — extracted from Fall River's real terrain
+  (`terrain.extract_crest_alignment`) and visually confirmed. Not yet done
+  for Loch Lomond.
+- ✅ Fall River's `max_storage_ac_ft: 1050` — confirmed by the owner.
+
+**Still needed before a real HEC-RAS run:**
+1. **A `normal_pool_elevation_ft` field** — `config.py`'s `DamConfig`
+   doesn't have one yet. Loch Lomond's real numbers now show concretely why
+   it matters: DEM-derived storage matches the reported figure to within
+   1% near ~11,192 ft but is 29% off at crest (11,200 ft) — almost
+   certainly because normal pool sits a few feet below crest, and the
+   cross-check currently compares at crest for lack of anywhere else to
+   compare. Needed both for this and for the sunny-day initial condition
+   (`configure_initial_and_boundary_conditions`).
+2. **Mesh cell size and boundary-condition values** (downstream friction
    slope, tailwater assumptions) — engineering judgment calls that
    `ras_project.py` takes as parameters rather than assumes.
-6. Then: build the project (§2.5), run the plan in the installed
-   HEC-RAS 7.0.1, and run `reservoirs-postprocess` →
+3. Then: build the project (§2.5) — using the anchored/bathymetry-merged
+   storage curve and the extracted crest alignment as inputs — run the
+   plan in the installed HEC-RAS 7.0.1, and run `reservoirs-postprocess` →
    `reservoirs-structures` → `reservoirs-mapping` against its real output.
 
 Every output from that chain is still preliminary per
 [`preliminary_disclaimer.md`](preliminary_disclaimer.md) until a PE signs
-off on the items above.
+off on the anchored curve, the extracted crest alignment, and the values
+chosen in step 2 above.

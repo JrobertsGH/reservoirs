@@ -141,35 +141,50 @@ Confirmed with the user (2026-07-28): the reservoirs of interest are the
 Clear Creek County dams only. The Grand-County-looking files below are
 unrelated to this project and are not used anywhere in this toolkit.
 
-## Ignored (unrelated, do not use) -- previously-flagged ambiguous files
+## Ignored (unrelated, do not use) -- the breach-analysis bundle
 
-Several files in `C:\Users\jroberts\Downloads\` appear, from their own
-internal content, to describe a **different, unrelated "Loch Lomond"** in
-**Grand County** (near Granby/Shadow Mountain Reservoir, Upper Colorado
-River basin — not Clear Creek County):
+Four files in `C:\Users\jroberts\Downloads\` describe a **different,
+unrelated "Loch Lomond"** in **Grand County** (near Granby/Shadow Mountain
+Reservoir, Upper Colorado River basin — not Clear Creek County):
+`loch_lomond_breach_analysis.html`, `loch_lomond_breach_analysis_
+summary.json`, `loch_lomond_breach_flood_analysis.geojson`,
+`loch_lomond_inundation.geojson`. The JSON explicitly states `"county":
+"Grand County"`, `"region": "Upper Colorado River Basin"`, center
+coordinates lat 40.85°N (our Loch Lomond is at 39.83°N), and downstream
+impacts to "Granby" and "Kremmling" via "Cascade Creek." A 2026-07-29
+follow-up review found further, independent confirmation: these files'
+own derived statistics (~192 ac surface area, ~80,000 ac-ft storage) are
+6x/91x larger than this project's real Loch Lomond (31 ac / 875 ac-ft) —
+not the same dam by any measure. **Confirmed unrelated, not used.**
 
-- `loch_lomond_breach_analysis.html`, `loch_lomond_breach_analysis_
-  summary.json`, `loch_lomond_breach_flood_analysis.geojson`,
-  `loch_lomond_inundation.geojson` — the JSON explicitly states
-  `"county": "Grand County"`, `"region": "Upper Colorado River Basin"`,
-  center coordinates lat 40.85°N (our Loch Lomond is at 39.83°N), and
-  downstream impacts to "Granby" and "Kremmling" via "Cascade Creek" —
-  none of which match this project's Loch Lomond (Clear Creek County,
-  Fall River drainage, Idaho Springs).
-- `LOCH_LOMOND_TOPO_10042022.csv` / `.dwg` / `_PTS.pts` — raw coordinates
-  fall within the same UTM-13N-style range the mismatched JSON above
-  claims for the Grand County site.
+## Corrected 2026-07-29: `LOCH_LOMOND_TOPO_10042022.csv` IS genuine Clear Creek County data
 
-However, `CAROLINE_TOPO_10042022.csv`'s raw elevations (~11,874 ft) line up
-closely with the *correct*, Clear-Creek-County Lake Caroline's real crest
-elevation (11,880 ft, per its verified 2024 EIR) — so it's plausible that
-file is genuinely correct while the same-dated "LOCH_LOMOND_TOPO" file
-next to it is not, or that both were exported with an unusual/undocumented
-coordinate convention. **This is not resolved** — none of these
-Downloads topo/breach-analysis files have been used to inform any
-`dam.yaml` or terrain source in this project. Before incorporating any of
-them: confirm with the user what project/client they actually came from,
-since the accompanying JSON's own stated location doesn't match.
+Previously grouped with the unrelated batch above because its raw
+coordinate range matched the Grand County JSON's stated range. That was
+the JSON's location metadata being wrong, not this file: cross-checking
+directly (not just against the JSON) shows its 1,321 points (718 marked
+`description="BTM"`, i.e. bottom/bathymetric soundings) have an elevation
+range of 11,124–11,203 ft — matching this project's real Loch Lomond crest
+elevation (11,200 ft) almost exactly, not the Grand County reservoir's
+figures. Its `x`/`y` columns are swapped relative to (Easting, Northing)
+convention; once swapped, its points fall entirely inside Loch Lomond's
+real 2021 LiDAR survey extent (EPSG:2232 bounds
+2,945,116–2,952,492 / 1,726,409–1,733,181), and its centroid lands within
+~0.15 mi of the dam's recorded lat/lon. This is a genuine 2022-10-04
+bathymetric (submerged lakebed) survey of the real Loch Lomond — now
+referenced as a `bathymetry_points_csv` terrain source in
+`dams/loch_lomond/dam.yaml` (see `terrain.py`'s
+`build_terrain_from_lidar_and_bathymetry`, and `audit_trail.md`'s
+corresponding entry for the storage-curve impact). The `.dwg`/`_PTS.pts`
+siblings are the same survey in other formats; not independently
+re-verified, but presumed genuine alongside the CSV.
+
+`CAROLINE_TOPO_10042022.csv`, from the same batch, remains **unresolved**.
+Its elevation (~11,874 ft) and bounding-box area both land within a few
+percent of Lake Caroline's real figures, but its raw coordinates share the
+same undocumented local grid as files proven unrelated — worth revisiting
+with the same swap-xy + real-extent cross-check used above, but not done
+yet. Do not incorporate it without that check.
 
 ## Known data-quality issue: Loch Lomond drainage area
 
